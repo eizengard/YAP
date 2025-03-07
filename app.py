@@ -591,6 +591,84 @@ def initialize_vocabulary():
             db.session.rollback()
             logger.error(f"Error initializing vocabulary: {e}")
 
+@app.route('/api/generate-vocabulary', methods=['POST'])
+@login_required
+def generate_vocabulary():
+    try:
+        if not current_user.preferences:
+            return jsonify({'error': 'User preferences not set'}), 400
+
+        language = current_user.preferences.target_language
+        level = current_user.preferences.skill_level
+
+        # Create a detailed prompt for OpenAI
+        prompt = f"""
+        As a language learning expert, generate 10 vocabulary words for {language} at {level} level.
+        For each word, provide:
+        1. The word in the target language
+        2. English translation
+        3. An example sentence using the word
+        4. The difficulty level (1=beginner, 2=intermediate, 3=advanced)
+
+        Return the data in JSON format like this:
+        {{
+            "vocabulary": [
+                {{
+                    "word": "word in target language",
+                    "translation": "english translation",
+                    "example_sentence": "example sentence in target language",
+                    "difficulty": difficulty_level,
+                    "category": "category name"
+                }},
+                ...
+            ]
+        }}
+        """
+
+        # Get response from OpenAI
+        response = chat_with_ai(prompt)
+        data = json.loads(response)
+
+        # Save new vocabulary items
+        for item in data['vocabulary']:
+            vocab_item = VocabularyItem(
+                word=item['word'],
+                translation=item['translation'],
+                language=language,
+                category=item.get('category', 'general'),
+                difficulty=item['difficulty'],
+                example_sentence=item['example_sentence']
+            )
+            db.session.add(vocab_item)
+
+        db.session.commit()
+
+        # Create or update daily vocabulary set
+        today = datetime.utcnow().date()
+        daily_set = DailyVocabulary.query.filter_by(
+            user_id=current_user.id,
+            date=today
+        ).first()
+
+        if not daily_set:
+            daily_set = DailyVocabulary(user_id=current_user.id, date=today)
+            db.session.add(daily_set)
+
+        # Get newly created vocabulary items
+        new_words = VocabularyItem.query.filter_by(
+            language=language
+        ).order_by(db.func.random()).limit(10).all()
+
+        daily_set.vocabulary_items = new_words
+        db.session.commit()
+
+        return jsonify({'status': 'success', 'message': 'Vocabulary generated successfully'})
+
+    except Exception as e:
+        logger.error(f"Error generating vocabulary: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to generate vocabulary'}), 500
+
 with app.app_context():
     # Create all database tables
     db.create_all()
