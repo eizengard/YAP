@@ -60,9 +60,8 @@ function displayExercise() {
 
     exerciseHTML += `
             </div>
-            <div class="mt-3 d-flex justify-content-between align-items-center">
+            <div class="mt-3 text-center">
                 <button class="btn btn-success" onclick="checkAnswer()">Check Answer</button>
-                <button class="btn btn-primary" onclick="nextExercise()">Next</button>
             </div>
         </div>
     `;
