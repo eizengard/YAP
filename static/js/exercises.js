@@ -1,3 +1,4 @@
+// Exercise data
 const exercises = [
     {
         id: 'vocab_1',
@@ -24,12 +25,14 @@ const exercises = [
 
 let currentExerciseIndex = 0;
 let score = 0;
+let answerChecked = false;
 
 // Function to display the current exercise
 function displayExercise() {
     const exerciseContainer = document.getElementById('exercise-container');
     const progressBar = document.getElementById('progress-bar');
     const exercise = exercises[currentExerciseIndex];
+    answerChecked = false;
 
     // Update progress bar
     const progressPercentage = (currentExerciseIndex / exercises.length) * 100;
@@ -37,32 +40,51 @@ function displayExercise() {
     progressBar.setAttribute('aria-valuenow', progressPercentage);
 
     // Create exercise HTML
-    let exerciseHTML = '';
-
-    if (exercise.type === 'vocabulary') {
-        exerciseHTML = `
+    let exerciseHTML = `
+        <div class="feedback-message" style="display: none;"></div>
+        <div class="exercise-content">
             <h3>${exercise.question}</h3>
             <div class="options-container">
-        `;
+    `;
 
-        exercise.options.forEach((option, index) => {
-            exerciseHTML += `
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="answer" id="option${index}" value="${option}">
-                    <label class="form-check-label" for="option${index}">
-                        ${option}
-                    </label>
-                </div>
-            `;
-        });
-
+    exercise.options.forEach((option, index) => {
         exerciseHTML += `
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="answer" id="option${index}" value="${option}">
+                <label class="form-check-label" for="option${index}">
+                    ${option}
+                </label>
             </div>
-            <button class="btn btn-success mt-3" onclick="checkAnswer()">Check Answer</button>
         `;
-    }
+    });
+
+    exerciseHTML += `
+            </div>
+            <div class="mt-3 d-flex justify-content-between align-items-center">
+                <button class="btn btn-success" onclick="checkAnswer()">Check Answer</button>
+                <button class="btn btn-primary" onclick="nextExercise()">Next</button>
+            </div>
+        </div>
+    `;
 
     exerciseContainer.innerHTML = exerciseHTML;
+}
+
+// Function to show feedback message
+function showFeedback(message, isCorrect) {
+    const feedbackDiv = document.querySelector('.feedback-message');
+    feedbackDiv.className = `feedback-message alert ${isCorrect ? 'alert-success' : 'alert-danger'} mb-3`;
+    feedbackDiv.style.display = 'block';
+    feedbackDiv.textContent = message;
+
+    if (isCorrect) {
+        // Trigger confetti
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+        });
+    }
 }
 
 // Function to check answer
@@ -70,29 +92,37 @@ function checkAnswer() {
     const selectedOption = document.querySelector('input[name="answer"]:checked');
 
     if (!selectedOption) {
-        alert('Please select an answer!');
+        showFeedback('Please select an answer!', false);
         return;
     }
 
     const userAnswer = selectedOption.value;
     const correctAnswer = exercises[currentExerciseIndex].answer;
+    answerChecked = true;
 
     if (userAnswer === correctAnswer) {
         score++;
-        alert('Correct! 🎉');
+        showFeedback('Correct! 🎉', true);
     } else {
-        alert(`Incorrect. The correct answer is: ${correctAnswer}`);
+        showFeedback(`Incorrect. The correct answer is: ${correctAnswer}`, false);
     }
+
+    // Disable radio buttons after checking
+    document.querySelectorAll('input[name="answer"]').forEach(input => {
+        input.disabled = true;
+    });
 
     // Save progress to the server
     saveProgress();
-
-    // Move to next exercise or show results
-    nextExercise();
 }
 
 // Function to move to the next exercise
 function nextExercise() {
+    if (!answerChecked) {
+        showFeedback('Please check your answer before moving to the next question!', false);
+        return;
+    }
+
     if (currentExerciseIndex < exercises.length - 1) {
         currentExerciseIndex++;
         displayExercise();
@@ -118,12 +148,21 @@ function showResults() {
             <button class="btn btn-primary mt-3" onclick="restartExercises()">Try Again</button>
         </div>
     `;
+
+    if (percentage >= 80) {
+        confetti({
+            particleCount: 200,
+            spread: 90,
+            origin: { y: 0.6 }
+        });
+    }
 }
 
 // Function to restart exercises
 function restartExercises() {
     currentExerciseIndex = 0;
     score = 0;
+    answerChecked = false;
     displayExercise();
 }
 
