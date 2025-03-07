@@ -48,8 +48,6 @@ class VocabularyItem(db.Model):
     example_sentence = db.Column(db.Text)
     audio_url = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    daily_sets = db.relationship('DailyVocabulary', secondary='daily_vocabulary_items', backref=db.backref('vocabulary_items', lazy=True))
-
 
 class VocabularyProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -66,12 +64,7 @@ class DailyVocabulary(db.Model):
     date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
     completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    # Define relationship to User
-    user = db.relationship('User', backref=db.backref('daily_vocabulary', lazy=True))
-
-    # Define relationship to vocabulary items
-    vocabulary_items = db.relationship('VocabularyItem',
+    vocabulary_items = db.relationship('VocabularyItem', 
                                      secondary='daily_vocabulary_items',
                                      backref='daily_sets')
 
@@ -89,7 +82,4 @@ class SentencePractice(db.Model):
     correction = db.Column(db.Text)
     feedback = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    # Define relationships
-    user = db.relationship('User', backref=db.backref('sentence_practices', lazy=True))
     vocabulary_item = db.relationship('VocabularyItem')
