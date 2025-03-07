@@ -111,19 +111,43 @@
     margin: 20px 0;
 }
 
-.options-container .form-check {
+/* Enhanced option row styling */
+.option-row {
     margin: 10px 0;
     padding: 15px;
     border-radius: 8px;
     background-color: var(--bs-dark);
     transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--bs-secondary);
 }
 
-.options-container .form-check:hover {
+.option-row:hover {
     background-color: var(--bs-secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.option-row .form-check-label {
+    cursor: pointer;
+    flex: 1;
+    margin-left: 10px;
+}
+
+.option-row .form-check-input {
     cursor: pointer;
 }
 
-.options-container .form-check-input:checked + .form-check-label {
+.option-row .form-check-input:checked + .form-check-label {
     color: var(--bs-primary);
+    font-weight: 500;
+}
+
+/* Disable hover effects when option is disabled */
+.option-row:has(.form-check-input:disabled) {
+    cursor: not-allowed;
+    opacity: 0.7;
+    transform: none;
 }

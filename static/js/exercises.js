@@ -49,7 +49,7 @@ function displayExercise() {
 
     exercise.options.forEach((option, index) => {
         exerciseHTML += `
-            <div class="form-check">
+            <div class="form-check option-row" onclick="selectOption(${index})">
                 <input class="form-check-input" type="radio" name="answer" id="option${index}" value="${option}">
                 <label class="form-check-label" for="option${index}">
                     ${option}
@@ -68,6 +68,14 @@ function displayExercise() {
     `;
 
     exerciseContainer.innerHTML = exerciseHTML;
+}
+
+// Function to select an option when clicking anywhere in the option row
+function selectOption(index) {
+    const radio = document.getElementById(`option${index}`);
+    if (!radio.disabled) {
+        radio.checked = true;
+    }
 }
 
 // Function to show feedback message
