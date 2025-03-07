@@ -22,6 +22,8 @@ async function loadChatHistory() {
                 appendMessage('user', chat.message);
                 appendMessage('assistant', chat.response);
             });
+        } else {
+            throw new Error(data.error || 'Failed to load chat history');
         }
     } catch (error) {
         console.error('Failed to load chat history:', error);
@@ -42,11 +44,16 @@ chatForm.addEventListener('submit', async (e) => {
     const message = chatInput.value.trim();
     if (!message) return;
 
-    // Add user message to chat
-    appendMessage('user', message);
-    chatInput.value = '';
-
     try {
+        // Disable form while processing
+        chatInput.disabled = true;
+        const submitBtn = chatForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        // Add user message to chat
+        appendMessage('user', message);
+        chatInput.value = '';
+
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -60,12 +67,19 @@ chatForm.addEventListener('submit', async (e) => {
             throw new Error(data.error || 'Failed to get response');
         }
 
+        // Add AI response to chat
         appendMessage('assistant', data.response);
+
         // Convert response to speech
         await textToSpeech(data.response);
     } catch (error) {
         console.error('Chat error:', error);
         appendMessage('system', `Error: ${error.message}`);
+    } finally {
+        // Re-enable form
+        chatInput.disabled = false;
+        chatForm.querySelector('button[type="submit"]').disabled = false;
+        chatInput.focus();
     }
 });
 
@@ -88,14 +102,15 @@ async function textToSpeech(text) {
         });
 
         const data = await response.json();
-        if (response.ok) {
-            const audio = new Audio(data.audio_path);
-            audio.play();
-        } else {
+        if (!response.ok) {
             throw new Error(data.error || 'Text-to-speech failed');
         }
+
+        const audio = new Audio(data.audio_path);
+        await audio.play();
     } catch (error) {
         console.error('TTS error:', error);
+        appendMessage('system', 'Failed to play audio');
     }
 }
 
@@ -123,13 +138,14 @@ voiceButton.addEventListener('click', async () => {
                     });
 
                     const data = await response.json();
-                    if (response.ok) {
-                        chatInput.value = data.text;
-                    } else {
+                    if (!response.ok) {
                         throw new Error(data.error || 'Transcription failed');
                     }
+
+                    chatInput.value = data.text;
                 } catch (error) {
                     console.error('Transcription error:', error);
+                    appendMessage('system', `Error: ${error.message}`);
                 }
             };
 
@@ -138,6 +154,7 @@ voiceButton.addEventListener('click', async () => {
             voiceButton.classList.add('recording');
         } catch (error) {
             console.error('Recording error:', error);
+            appendMessage('system', 'Failed to start recording');
         }
     } else {
         mediaRecorder.stop();
