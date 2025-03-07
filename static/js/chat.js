@@ -81,6 +81,7 @@ chatForm.addEventListener('submit', async (e) => {
     }
 });
 
+// Audio playback handling
 function appendMessage(role, content, canSpeak = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
@@ -107,6 +108,8 @@ function appendMessage(role, content, canSpeak = false) {
                 if (!audio) {
                     // First time playing - fetch the audio
                     playButton.disabled = true;
+                    playButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
                     const response = await fetch('/api/text-to-speech', {
                         method: 'POST',
                         headers: {
@@ -132,6 +135,14 @@ function appendMessage(role, content, canSpeak = false) {
                         console.error("Audio playback failed");
                         appendMessage('system', 'Failed to play audio');
                         playButton.disabled = false;
+                        playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
+                    };
+
+                    // Add progress indicator
+                    audio.onprogress = () => {
+                        if (isPlaying) {
+                            playButton.innerHTML = '<i class="bi bi-pause-fill"></i>';
+                        }
                     };
                 }
 
@@ -149,11 +160,13 @@ function appendMessage(role, content, canSpeak = false) {
                     } catch (error) {
                         console.error("Audio playback failed:", error);
                         appendMessage('system', 'Failed to play audio');
+                        playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
                     }
                 }
             } catch (error) {
                 console.error('TTS error:', error);
                 appendMessage('system', 'Failed to play audio');
+                playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
             } finally {
                 playButton.disabled = false;
             }

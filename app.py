@@ -168,7 +168,14 @@ def text_to_speech():
         if not text:
             return jsonify({'error': 'No text provided'}), 400
 
-        tts = gTTS(text=text, lang='en')
+        # Configure TTS with enhanced parameters
+        tts = gTTS(
+            text=text,
+            lang='en',  # Default to English
+            lang_check=True,  # Enable language checking
+            slow=False,  # Normal speed
+            tld='com'  # Use US accent
+        )
 
         # Create temporary file with unique name
         audio_filename = f'tts_{datetime.utcnow().timestamp()}.mp3'
