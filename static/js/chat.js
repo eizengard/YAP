@@ -92,42 +92,79 @@ function appendMessage(role, content, canSpeak = false) {
 
     // Add speak button for AI responses
     if (canSpeak) {
-        const speakButton = document.createElement('button');
-        speakButton.className = 'btn btn-sm btn-secondary ms-2';
-        speakButton.innerHTML = '<i class="bi bi-volume-up"></i>';
-        speakButton.onclick = () => textToSpeech(content);
-        messageDiv.appendChild(speakButton);
+        const audioControls = document.createElement('div');
+        audioControls.className = 'audio-controls';
+
+        const playButton = document.createElement('button');
+        playButton.className = 'btn btn-sm btn-secondary ms-2';
+        playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
+
+        let audio = null;
+        let isPlaying = false;
+
+        playButton.onclick = async () => {
+            try {
+                if (!audio) {
+                    // First time playing - fetch the audio
+                    playButton.disabled = true;
+                    const response = await fetch('/api/text-to-speech', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ text: content }),
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Text-to-speech failed');
+                    }
+
+                    audio = new Audio(data.audio_url);
+
+                    // Add audio event listeners
+                    audio.onended = () => {
+                        isPlaying = false;
+                        playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
+                    };
+
+                    audio.onerror = () => {
+                        console.error("Audio playback failed");
+                        appendMessage('system', 'Failed to play audio');
+                        playButton.disabled = false;
+                    };
+                }
+
+                if (isPlaying) {
+                    // Pause the audio
+                    audio.pause();
+                    isPlaying = false;
+                    playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
+                } else {
+                    // Play the audio
+                    try {
+                        await audio.play();
+                        isPlaying = true;
+                        playButton.innerHTML = '<i class="bi bi-pause-fill"></i>';
+                    } catch (error) {
+                        console.error("Audio playback failed:", error);
+                        appendMessage('system', 'Failed to play audio');
+                    }
+                }
+            } catch (error) {
+                console.error('TTS error:', error);
+                appendMessage('system', 'Failed to play audio');
+            } finally {
+                playButton.disabled = false;
+            }
+        };
+
+        audioControls.appendChild(playButton);
+        messageDiv.appendChild(audioControls);
     }
 
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-async function textToSpeech(text) {
-    try {
-        const response = await fetch('/api/text-to-speech', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text }),
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'Text-to-speech failed');
-        }
-
-        const audio = new Audio(data.audio_url);
-        audio.play().catch(error => {
-            console.error("Audio playback failed:", error);
-            appendMessage('system', 'Failed to play audio');
-        });
-
-    } catch (error) {
-        console.error('TTS error:', error);
-        appendMessage('system', 'Failed to play audio');
-    }
 }
 
 // Voice recording functionality

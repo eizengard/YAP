@@ -63,3 +63,25 @@
 .message button:hover {
     opacity: 1;
 }
+
+/* Audio controls styling */
+.audio-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.audio-controls button {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    min-width: 32px;
+}
+
+.audio-controls button:hover {
+    opacity: 1;
+}
+
+.audio-controls button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
