@@ -377,6 +377,11 @@ def preferences():
 @app.route('/daily-practice')
 @login_required
 def daily_practice():
+    # Check if user has set preferences
+    if not current_user.preferences:
+        flash('Please set your language preferences first.', 'warning')
+        return redirect(url_for('preferences'))
+
     # Get or create today's vocabulary set
     today = datetime.utcnow().date()
     daily_set = DailyVocabulary.query.filter_by(
@@ -402,6 +407,10 @@ def daily_practice():
             language=current_user.preferences.target_language,
             difficulty=difficulty
         ).order_by(db.func.random()).limit(10).all()
+
+        if not words:
+            flash('No vocabulary items available for your language and level.', 'warning')
+            return redirect(url_for('index'))
 
         daily_set.vocabulary_items.extend(words)
         db.session.add(daily_set)
@@ -479,7 +488,111 @@ def submit_sentence():
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
+def initialize_vocabulary():
+    """Initialize vocabulary items if none exist."""
+    if VocabularyItem.query.count() == 0:
+        # Sample vocabulary items for different levels and languages
+        items = [
+            # Spanish - Beginner
+            {
+                'word': 'casa',
+                'translation': 'house',
+                'language': 'es',
+                'category': 'basic',
+                'difficulty': 1,
+                'example_sentence': 'Mi casa es grande.'
+            },
+            {
+                'word': 'perro',
+                'translation': 'dog',
+                'language': 'es',
+                'category': 'animals',
+                'difficulty': 1,
+                'example_sentence': 'El perro es amigable.'
+            },
+            {
+                'word': 'libro',
+                'translation': 'book',
+                'language': 'es',
+                'category': 'basic',
+                'difficulty': 1,
+                'example_sentence': 'Me gusta leer este libro.'
+            },
+            # Spanish - Intermediate
+            {
+                'word': 'trabajo',
+                'translation': 'work',
+                'language': 'es',
+                'category': 'basic',
+                'difficulty': 2,
+                'example_sentence': 'Me gusta mi trabajo.'
+            },
+            # Italian - Beginner
+            {
+                'word': 'casa',
+                'translation': 'house',
+                'language': 'it',
+                'category': 'basic',
+                'difficulty': 1,
+                'example_sentence': 'La mia casa è grande.'
+            },
+            {
+                'word': 'cane',
+                'translation': 'dog',
+                'language': 'it',
+                'category': 'animals',
+                'difficulty': 1,
+                'example_sentence': 'Il cane è amichevole.'
+            },
+            # French - Beginner
+            {
+                'word': 'maison',
+                'translation': 'house',
+                'language': 'fr',
+                'category': 'basic',
+                'difficulty': 1,
+                'example_sentence': 'Ma maison est grande.'
+            },
+            {
+                'word': 'chien',
+                'translation': 'dog',
+                'language': 'fr',
+                'category': 'animals',
+                'difficulty': 1,
+                'example_sentence': 'Le chien est amical.'
+            },
+            # German - Beginner
+            {
+                'word': 'Haus',
+                'translation': 'house',
+                'language': 'de',
+                'category': 'basic',
+                'difficulty': 1,
+                'example_sentence': 'Mein Haus ist groß.'
+            },
+            {
+                'word': 'Hund',
+                'translation': 'dog',
+                'language': 'de',
+                'category': 'animals',
+                'difficulty': 1,
+                'example_sentence': 'Der Hund ist freundlich.'
+            }
+        ]
+
+        for item in items:
+            vocab_item = VocabularyItem(**item)
+            db.session.add(vocab_item)
+
+        try:
+            db.session.commit()
+            logger.info("Initialized vocabulary items")
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error initializing vocabulary: {e}")
+
 with app.app_context():
     # Create all database tables
     db.create_all()
     logger.info("Database tables created successfully")
+    initialize_vocabulary()
