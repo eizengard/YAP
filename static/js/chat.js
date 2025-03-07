@@ -1,3 +1,19 @@
+document.addEventListener('DOMContentLoaded', async () => {
+    // Load chat history when page loads
+    try {
+        const response = await fetch('/api/chat/history');
+        const data = await response.json();
+        if (response.ok) {
+            data.history.reverse().forEach(chat => {
+                appendMessage('user', chat.message);
+                appendMessage('assistant', chat.response);
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load chat history:', error);
+    }
+});
+
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const chatMessages = document.getElementById('chat-messages');

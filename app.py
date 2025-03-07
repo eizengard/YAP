@@ -6,6 +6,7 @@ from sqlalchemy.orm import DeclarativeBase
 from flask_login import LoginManager, current_user
 from gtts import gTTS
 import tempfile
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -39,7 +40,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Import models after db initialization
-from models import User, Progress
+from models import User, Progress, Chat # Added Chat model import
 from utils.openai_helper import chat_with_ai, transcribe_audio
 
 @login_manager.user_loader
@@ -61,13 +62,49 @@ def exercises():
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
     try:
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'User not authenticated'}), 401
+
         data = request.json
         user_message = data.get('message')
         response = chat_with_ai(user_message)
+
+        # Save the chat message and response
+        chat = Chat(
+            user_id=current_user.id,
+            message=user_message,
+            response=response,
+            timestamp=datetime.utcnow() # Added timestamp
+        )
+        db.session.add(chat)
+        db.session.commit()
+
         return jsonify({'response': response})
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
         return jsonify({'error': 'Failed to process chat message'}), 500
+
+@app.route('/api/chat/history', methods=['GET'])
+def get_chat_history():
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'User not authenticated'}), 401
+
+        chats = Chat.query.filter_by(user_id=current_user.id)\
+            .order_by(Chat.timestamp.desc())\
+            .limit(50)\
+            .all()
+
+        chat_history = [{
+            'message': chat.message,
+            'response': chat.response,
+            'timestamp': chat.timestamp.isoformat()
+        } for chat in chats]
+
+        return jsonify({'history': chat_history})
+    except Exception as e:
+        logger.error(f"Chat history error: {str(e)}")
+        return jsonify({'error': 'Failed to fetch chat history'}), 500
 
 @app.route('/api/text-to-speech', methods=['POST'])
 def text_to_speech():
