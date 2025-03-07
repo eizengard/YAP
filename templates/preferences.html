@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="mb-0">Personalize Your Learning Experience</h2>
+            </div>
+            <div class="card-body">
+                <p class="lead mb-4">
+                    Help us customize your learning journey by answering a few questions.
+                    This will allow us to provide you with the most relevant content and exercises.
+                </p>
+                
+                <form method="POST" action="{{ url_for('preferences') }}">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-4">
+                        {{ form.target_language.label(class="form-label") }}
+                        {{ form.target_language(class="form-select") }}
+                        {% if form.target_language.errors %}
+                            {% for error in form.target_language.errors %}
+                                <div class="alert alert-danger">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-4">
+                        {{ form.skill_level.label(class="form-label") }}
+                        {{ form.skill_level(class="form-select") }}
+                        {% if form.skill_level.errors %}
+                            {% for error in form.skill_level.errors %}
+                                <div class="alert alert-danger">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-4">
+                        {{ form.practice_duration.label(class="form-label") }}
+                        <div class="input-group">
+                            {{ form.practice_duration(class="form-control", type="number", min="5", max="180") }}
+                            <span class="input-group-text">minutes</span>
+                        </div>
+                        {% if form.practice_duration.errors %}
+                            {% for error in form.practice_duration.errors %}
+                                <div class="alert alert-danger">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-4">
+                        {{ form.learning_goal.label(class="form-label") }}
+                        {{ form.learning_goal(class="form-control", rows="4", placeholder="e.g., I'm planning to travel, for work, to connect with family...") }}
+                        {% if form.learning_goal.errors %}
+                            {% for error in form.learning_goal.errors %}
+                                <div class="alert alert-danger">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="text-center">
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

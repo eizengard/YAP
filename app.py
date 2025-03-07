@@ -41,8 +41,8 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Import models after db initialization
-from models import User, Progress, Chat, VocabularyItem, VocabularyProgress
-from forms import LoginForm, RegisterForm
+from models import User, Progress, Chat, VocabularyItem, VocabularyProgress, UserPreferences
+from forms import LoginForm, RegisterForm, UserPreferencesForm
 from utils.openai_helper import chat_with_ai, transcribe_audio
 
 @login_manager.user_loader
@@ -90,8 +90,12 @@ def register():
         )
         db.session.add(user)
         db.session.commit()
-        flash('Registration successful! Please login.', 'success')
-        return redirect(url_for('login'))
+
+        # Log the user in
+        login_user(user)
+        flash('Registration successful! Please tell us about your learning goals.', 'success')
+        return redirect(url_for('preferences'))
+
     return render_template('register.html', form=form)
 
 @app.route('/logout')
@@ -336,6 +340,39 @@ def save_vocabulary_progress():
         logger.error(f"Error saving vocabulary progress: {str(e)}")
         db.session.rollback()
         return jsonify({'error': 'Failed to save progress'}), 500
+
+@app.route('/preferences', methods=['GET', 'POST'])
+@login_required
+def preferences():
+    # Check if user already has preferences
+    if current_user.preferences and not request.args.get('edit'):
+        return redirect(url_for('index'))
+
+    form = UserPreferencesForm()
+    if form.validate_on_submit():
+        # Update existing preferences or create new ones
+        preferences = current_user.preferences or UserPreferences(user_id=current_user.id)
+        preferences.target_language = form.target_language.data
+        preferences.skill_level = form.skill_level.data
+        preferences.practice_duration = form.practice_duration.data
+        preferences.learning_goal = form.learning_goal.data
+
+        if not current_user.preferences:
+            db.session.add(preferences)
+
+        db.session.commit()
+        flash('Your preferences have been saved!', 'success')
+        return redirect(url_for('index'))
+
+    # If user has existing preferences, pre-fill the form
+    elif current_user.preferences and request.method == 'GET':
+        form.target_language.data = current_user.preferences.target_language
+        form.skill_level.data = current_user.preferences.skill_level
+        form.practice_duration.data = current_user.preferences.practice_duration
+        form.learning_goal.data = current_user.preferences.learning_goal
+
+    return render_template('preferences.html', form=form)
+
 
 from werkzeug.security import generate_password_hash, check_password_hash
 

@@ -10,6 +10,17 @@ class User(UserMixin, db.Model):
     progress = db.relationship('Progress', backref='user', lazy=True)
     chats = db.relationship('Chat', backref='user', lazy=True)
     vocabulary_progress = db.relationship('VocabularyProgress', backref='user', lazy=True)
+    preferences = db.relationship('UserPreferences', backref='user', uselist=False)
+
+class UserPreferences(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    target_language = db.Column(db.String(10), nullable=False)  # e.g., 'es', 'it'
+    skill_level = db.Column(db.String(20), nullable=False)  # beginner, intermediate, advanced
+    practice_duration = db.Column(db.Integer, nullable=False)  # minutes per day
+    learning_goal = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Progress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
