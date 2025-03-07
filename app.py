@@ -165,16 +165,19 @@ def get_chat_history():
 def text_to_speech():
     try:
         text = request.json.get('text')
+        lang = request.json.get('lang', 'en')  # Default to English
+        accent = request.json.get('accent', 'com')  # Default to US accent
+
         if not text:
             return jsonify({'error': 'No text provided'}), 400
 
         # Configure TTS with enhanced parameters
         tts = gTTS(
             text=text,
-            lang='en',  # Default to English
+            lang=lang,  # Use requested language
             lang_check=True,  # Enable language checking
             slow=False,  # Normal speed
-            tld='com'  # Use US accent
+            tld=accent  # Use requested accent (com=US, co.uk=British, ca=Canadian, etc.)
         )
 
         # Create temporary file with unique name
@@ -189,7 +192,11 @@ def text_to_speech():
 
         # Return the URL path to the audio file
         audio_url = url_for('static', filename=f'audio/{audio_filename}')
-        return jsonify({'audio_url': audio_url})
+        return jsonify({
+            'audio_url': audio_url,
+            'lang': lang,
+            'accent': accent
+        })
     except Exception as e:
         logger.error(f"TTS error: {str(e)}")
         return jsonify({'error': 'Text-to-speech conversion failed'}), 500

@@ -110,12 +110,32 @@ function appendMessage(role, content, canSpeak = false) {
                     playButton.disabled = true;
                     playButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
 
+                    // Detect if the text contains mostly Spanish or Italian words
+                    const hasSpanish = /[áéíóúñ¿¡]/i.test(content) || /hola|gracias|por favor/i.test(content);
+                    const hasItalian = /[àèéìíòóùú]/i.test(content) || /ciao|grazie|prego/i.test(content);
+
+                    // Choose language and accent based on content
+                    let lang = 'en';
+                    let accent = 'com'; // Default to US English
+
+                    if (hasSpanish) {
+                        lang = 'es';
+                        accent = 'es'; // Spanish accent
+                    } else if (hasItalian) {
+                        lang = 'it';
+                        accent = 'it'; // Italian accent
+                    }
+
                     const response = await fetch('/api/text-to-speech', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ text: content }),
+                        body: JSON.stringify({ 
+                            text: content,
+                            lang: lang,
+                            accent: accent
+                        }),
                     });
 
                     const data = await response.json();
