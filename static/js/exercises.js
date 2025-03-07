@@ -88,19 +88,22 @@ const exercises = [
         type: 'vocabulary',
         question: 'What is the English word for "casa"?',
         options: ['House', 'Car', 'Book', 'Dog'],
-        answer: 'House'
+        answer: 'House',
+        id: 'vocab_1'
     },
     {
         type: 'vocabulary',
         question: 'What is the English word for "libro"?',
         options: ['Pencil', 'Book', 'Table', 'Computer'],
-        answer: 'Book'
+        answer: 'Book',
+        id: 'vocab_2'
     },
     {
         type: 'vocabulary',
         question: 'What is the English word for "perro"?',
         options: ['Cat', 'Bird', 'Dog', 'Fish'],
-        answer: 'Dog'
+        answer: 'Dog',
+        id: 'vocab_3'
     }
 ];
 
@@ -112,21 +115,21 @@ function displayExercise() {
     const exerciseContainer = document.getElementById('exercise-container');
     const progressBar = document.getElementById('progress-bar');
     const exercise = exercises[currentExerciseIndex];
-    
+
     // Update progress bar
     const progressPercentage = (currentExerciseIndex / exercises.length) * 100;
     progressBar.style.width = `${progressPercentage}%`;
     progressBar.setAttribute('aria-valuenow', progressPercentage);
-    
+
     // Create exercise HTML
     let exerciseHTML = '';
-    
+
     if (exercise.type === 'vocabulary') {
         exerciseHTML = `
             <h3>${exercise.question}</h3>
             <div class="options-container">
         `;
-        
+
         exercise.options.forEach((option, index) => {
             exerciseHTML += `
                 <div class="form-check">
@@ -137,38 +140,38 @@ function displayExercise() {
                 </div>
             `;
         });
-        
+
         exerciseHTML += `
             </div>
             <button class="btn btn-success mt-3" onclick="checkVocabAnswer()">Check Answer</button>
         `;
     }
-    
+
     exerciseContainer.innerHTML = exerciseHTML;
 }
 
 // Function to check vocabulary exercise answer
 function checkVocabAnswer() {
     const selectedOption = document.querySelector('input[name="answer"]:checked');
-    
+
     if (!selectedOption) {
         alert('Please select an answer!');
         return;
     }
-    
+
     const userAnswer = selectedOption.value;
     const correctAnswer = exercises[currentExerciseIndex].answer;
-    
+
     if (userAnswer === correctAnswer) {
         score++;
         alert('Correct! 🎉');
     } else {
         alert(`Incorrect. The correct answer is: ${correctAnswer}`);
     }
-    
+
     // Save progress to the server
     saveProgress();
-    
+
     // Move to next exercise or show results
     nextExercise();
 }
@@ -195,12 +198,12 @@ function previousExercise() {
 function showResults() {
     const exerciseContainer = document.getElementById('exercise-container');
     const progressBar = document.getElementById('progress-bar');
-    
+
     progressBar.style.width = '100%';
     progressBar.setAttribute('aria-valuenow', 100);
-    
+
     const percentage = Math.round((score / exercises.length) * 100);
-    
+
     exerciseContainer.innerHTML = `
         <div class="text-center">
             <h2>Exercise Complete!</h2>
@@ -208,7 +211,7 @@ function showResults() {
             <button class="btn btn-primary mt-3" onclick="restartExercises()">Try Again</button>
         </div>
     `;
-    
+
     // Hide navigation buttons
     document.getElementById('prev-btn').style.display = 'none';
     document.getElementById('next-btn').style.display = 'none';
@@ -218,11 +221,11 @@ function showResults() {
 function restartExercises() {
     currentExerciseIndex = 0;
     score = 0;
-    
+
     // Show navigation buttons
     document.getElementById('prev-btn').style.display = 'block';
     document.getElementById('next-btn').style.display = 'block';
-    
+
     displayExercise();
 }
 
@@ -235,11 +238,11 @@ async function saveProgress() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                exercise_id: `vocab_${currentExerciseIndex}`,
+                exercise_id: exercises[currentExerciseIndex].id,
                 score: score
             }),
         });
-        
+
         if (!response.ok) {
             console.error('Failed to save progress');
         }
