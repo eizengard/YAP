@@ -1,9 +1,23 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // Load chat history when page loads
+    await loadChatHistory();
+});
+
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
+const chatMessages = document.getElementById('chat-messages');
+const newChatBtn = document.getElementById('new-chat-btn');
+const voiceButton = document.getElementById('voice-button');
+
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+
+async function loadChatHistory() {
     try {
         const response = await fetch('/api/chat/history');
         const data = await response.json();
         if (response.ok) {
+            chatMessages.innerHTML = ''; // Clear existing messages
             data.history.reverse().forEach(chat => {
                 appendMessage('user', chat.message);
                 appendMessage('assistant', chat.response);
@@ -11,17 +25,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch (error) {
         console.error('Failed to load chat history:', error);
+        appendMessage('system', 'Failed to load chat history');
     }
+}
+
+// New chat button handler
+newChatBtn.addEventListener('click', () => {
+    chatMessages.innerHTML = ''; // Clear the chat messages
+    chatInput.value = ''; // Clear input field
+    chatInput.focus(); // Focus on input field
 });
-
-const chatForm = document.getElementById('chat-form');
-const chatInput = document.getElementById('chat-input');
-const chatMessages = document.getElementById('chat-messages');
-const voiceButton = document.getElementById('voice-button');
-
-let isRecording = false;
-let mediaRecorder = null;
-let audioChunks = [];
 
 // Chat form submit handler
 chatForm.addEventListener('submit', async (e) => {
@@ -122,7 +135,6 @@ voiceButton.addEventListener('click', async () => {
 
             mediaRecorder.start();
             isRecording = true;
-            voiceButton.textContent = 'Stop Recording';
             voiceButton.classList.add('recording');
         } catch (error) {
             console.error('Recording error:', error);
@@ -130,7 +142,6 @@ voiceButton.addEventListener('click', async () => {
     } else {
         mediaRecorder.stop();
         isRecording = false;
-        voiceButton.textContent = 'Start Recording';
         voiceButton.classList.remove('recording');
     }
 });
