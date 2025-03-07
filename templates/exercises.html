@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="mb-0">Language Exercises</h2>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-4">
+                    <div id="progress-bar" class="progress-bar" role="progressbar"></div>
+                </div>
+                
+                <div id="exercise-container"></div>
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <button id="prev-btn" class="btn btn-secondary" onclick="previousExercise()">Previous</button>
+                    <button id="next-btn" class="btn btn-primary" onclick="nextExercise()">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/exercises.js') }}"></script>
+{% endblock %}
