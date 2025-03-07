@@ -1,12 +1,13 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from gtts import gTTS
 import tempfile
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -40,7 +41,8 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Import models after db initialization
-from models import User, Progress, Chat # Added Chat model import
+from models import User, Progress, Chat
+from forms import LoginForm, RegisterForm
 from utils.openai_helper import chat_with_ai, transcribe_audio
 
 @login_manager.user_loader
@@ -51,20 +53,68 @@ def load_user(user_id):
 def index():
     return render_template('index.html')
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and check_password_hash(user.password_hash, form.password.data):
+            login_user(user)
+            flash('Logged in successfully!', 'success')
+            return redirect(url_for('index'))
+        flash('Invalid email or password', 'error')
+    return render_template('login.html', form=form)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    form = RegisterForm()
+    if form.validate_on_submit():
+        if User.query.filter_by(email=form.email.data).first():
+            flash('Email already registered', 'error')
+            return render_template('register.html', form=form)
+
+        if User.query.filter_by(username=form.username.data).first():
+            flash('Username already taken', 'error')
+            return render_template('register.html', form=form)
+
+        user = User(
+            username=form.username.data,
+            email=form.email.data,
+            password_hash=generate_password_hash(form.password.data)
+        )
+        db.session.add(user)
+        db.session.commit()
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html', form=form)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Logged out successfully!', 'success')
+    return redirect(url_for('index'))
+
 @app.route('/chat')
+@login_required
 def chat():
     return render_template('chat.html')
 
 @app.route('/exercises')
+@login_required
 def exercises():
     return render_template('exercises.html')
 
 @app.route('/api/chat', methods=['POST'])
+@login_required
 def handle_chat():
     try:
-        if not current_user.is_authenticated:
-            return jsonify({'error': 'User not authenticated'}), 401
-
         data = request.json
         user_message = data.get('message')
         if not user_message:
@@ -91,11 +141,9 @@ def handle_chat():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/chat/history', methods=['GET'])
+@login_required
 def get_chat_history():
     try:
-        if not current_user.is_authenticated:
-            return jsonify({'error': 'User not authenticated'}), 401
-
         chats = Chat.query.filter_by(user_id=current_user.id)\
             .order_by(Chat.timestamp.desc())\
             .limit(50)\
@@ -113,6 +161,7 @@ def get_chat_history():
         return jsonify({'error': 'Failed to fetch chat history'}), 500
 
 @app.route('/api/text-to-speech', methods=['POST'])
+@login_required
 def text_to_speech():
     try:
         text = request.json.get('text')
@@ -127,11 +176,9 @@ def text_to_speech():
         return jsonify({'error': 'Text-to-speech conversion failed'}), 500
 
 @app.route('/api/save-progress', methods=['POST'])
+@login_required
 def save_progress():
     try:
-        if not current_user.is_authenticated:
-            return jsonify({'error': 'User not authenticated'}), 401
-
         data = request.json
         progress = Progress(
             user_id=current_user.id,
