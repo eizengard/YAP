@@ -118,12 +118,11 @@ async function textToSpeech(text) {
             throw new Error(data.error || 'Text-to-speech failed');
         }
 
-        const audio = new Audio(data.audio_path);
-        // await audio.play(); // Removed automatic playback
+        const audio = new Audio(data.audio_url);
         audio.play().catch(error => {
             console.error("Audio playback failed:", error);
             appendMessage('system', 'Failed to play audio');
-        })
+        });
 
     } catch (error) {
         console.error('TTS error:', error);

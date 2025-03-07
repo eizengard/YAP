@@ -165,12 +165,24 @@ def get_chat_history():
 def text_to_speech():
     try:
         text = request.json.get('text')
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+
         tts = gTTS(text=text, lang='en')
 
-        # Create temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
-            tts.save(fp.name)
-            return jsonify({'audio_path': fp.name})
+        # Create temporary file with unique name
+        audio_filename = f'tts_{datetime.utcnow().timestamp()}.mp3'
+        audio_path = os.path.join('static', 'audio', audio_filename)
+
+        # Ensure audio directory exists
+        os.makedirs(os.path.join('static', 'audio'), exist_ok=True)
+
+        # Save the audio file
+        tts.save(audio_path)
+
+        # Return the URL path to the audio file
+        audio_url = url_for('static', filename=f'audio/{audio_filename}')
+        return jsonify({'audio_url': audio_url})
     except Exception as e:
         logger.error(f"TTS error: {str(e)}")
         return jsonify({'error': 'Text-to-speech conversion failed'}), 500
