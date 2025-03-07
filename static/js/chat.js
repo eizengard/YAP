@@ -68,10 +68,8 @@ chatForm.addEventListener('submit', async (e) => {
         }
 
         // Add AI response to chat
-        appendMessage('assistant', data.response);
+        appendMessage('assistant', data.response, true); // Added true to indicate it's an AI response
 
-        // Convert response to speech
-        await textToSpeech(data.response);
     } catch (error) {
         console.error('Chat error:', error);
         appendMessage('system', `Error: ${error.message}`);
@@ -83,10 +81,24 @@ chatForm.addEventListener('submit', async (e) => {
     }
 });
 
-function appendMessage(role, content) {
+function appendMessage(role, content, canSpeak = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
-    messageDiv.textContent = content;
+
+    // Create message content
+    const textSpan = document.createElement('span');
+    textSpan.textContent = content;
+    messageDiv.appendChild(textSpan);
+
+    // Add speak button for AI responses
+    if (canSpeak) {
+        const speakButton = document.createElement('button');
+        speakButton.className = 'btn btn-sm btn-secondary ms-2';
+        speakButton.innerHTML = '<i class="bi bi-volume-up"></i>';
+        speakButton.onclick = () => textToSpeech(content);
+        messageDiv.appendChild(speakButton);
+    }
+
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -107,7 +119,12 @@ async function textToSpeech(text) {
         }
 
         const audio = new Audio(data.audio_path);
-        await audio.play();
+        // await audio.play(); // Removed automatic playback
+        audio.play().catch(error => {
+            console.error("Audio playback failed:", error);
+            appendMessage('system', 'Failed to play audio');
+        })
+
     } catch (error) {
         console.error('TTS error:', error);
         appendMessage('system', 'Failed to play audio');
