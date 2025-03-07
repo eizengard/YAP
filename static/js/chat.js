@@ -23,6 +23,7 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 
+// Chat form submit handler
 chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const message = chatInput.value.trim();
@@ -42,16 +43,16 @@ chatForm.addEventListener('submit', async (e) => {
         });
 
         const data = await response.json();
-        if (response.ok) {
-            appendMessage('assistant', data.response);
-            // Convert response to speech
-            await textToSpeech(data.response);
-        } else {
+        if (!response.ok) {
             throw new Error(data.error || 'Failed to get response');
         }
+
+        appendMessage('assistant', data.response);
+        // Convert response to speech
+        await textToSpeech(data.response);
     } catch (error) {
         console.error('Chat error:', error);
-        appendMessage('system', 'Error: Failed to get response');
+        appendMessage('system', `Error: ${error.message}`);
     }
 });
 

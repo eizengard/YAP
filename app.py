@@ -67,6 +67,10 @@ def handle_chat():
 
         data = request.json
         user_message = data.get('message')
+        if not user_message:
+            return jsonify({'error': 'No message provided'}), 400
+
+        logger.debug(f"Processing chat message: {user_message}")
         response = chat_with_ai(user_message)
 
         # Save the chat message and response
@@ -74,15 +78,17 @@ def handle_chat():
             user_id=current_user.id,
             message=user_message,
             response=response,
-            timestamp=datetime.utcnow() # Added timestamp
+            timestamp=datetime.utcnow()
         )
         db.session.add(chat)
         db.session.commit()
+        logger.debug("Chat message saved successfully")
 
         return jsonify({'response': response})
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
-        return jsonify({'error': 'Failed to process chat message'}), 500
+        db.session.rollback()  # Rollback the transaction in case of error
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/chat/history', methods=['GET'])
 def get_chat_history():
