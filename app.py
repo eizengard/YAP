@@ -9,16 +9,24 @@ import tempfile
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
     pass
 
+# Initialize SQLAlchemy with the model class
 db = SQLAlchemy(model_class=Base)
+
+# Create the Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET")
 
-# Database configuration
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///language_app.db")
+# Configure database
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
+    raise RuntimeError("DATABASE_URL environment variable is not set")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
@@ -30,6 +38,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Import models after db initialization
 from models import User, Progress
 from utils.openai_helper import chat_with_ai, transcribe_audio
 
@@ -57,7 +66,7 @@ def handle_chat():
         response = chat_with_ai(user_message)
         return jsonify({'response': response})
     except Exception as e:
-        logging.error(f"Chat error: {str(e)}")
+        logger.error(f"Chat error: {str(e)}")
         return jsonify({'error': 'Failed to process chat message'}), 500
 
 @app.route('/api/text-to-speech', methods=['POST'])
@@ -71,7 +80,7 @@ def text_to_speech():
             tts.save(fp.name)
             return jsonify({'audio_path': fp.name})
     except Exception as e:
-        logging.error(f"TTS error: {str(e)}")
+        logger.error(f"TTS error: {str(e)}")
         return jsonify({'error': 'Text-to-speech conversion failed'}), 500
 
 @app.route('/api/save-progress', methods=['POST'])
@@ -90,8 +99,10 @@ def save_progress():
         db.session.commit()
         return jsonify({'status': 'success'})
     except Exception as e:
-        logging.error(f"Progress save error: {str(e)}")
+        logger.error(f"Progress save error: {str(e)}")
         return jsonify({'error': 'Failed to save progress'}), 500
 
 with app.app_context():
+    # Create all database tables
     db.create_all()
+    logger.info("Database tables created successfully")
