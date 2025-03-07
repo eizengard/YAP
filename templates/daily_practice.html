@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0">Daily Vocabulary Practice</h2>
+                    <span class="badge bg-primary">{{ daily_set.vocabulary_items|length }}/10 words</span>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3">
+                        <div class="progress-bar" role="progressbar" 
+                             style="width: {{ (completed_sentences|length / 10) * 100 }}%"
+                             aria-valuenow="{{ completed_sentences|length }}" 
+                             aria-valuemin="0" aria-valuemax="10">
+                        </div>
+                    </div>
+                    
+                    <div class="vocabulary-list mb-4">
+                        {% for word in daily_set.vocabulary_items %}
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ word.word }}</h5>
+                                <p class="card-text text-muted">{{ word.translation }}</p>
+                                <p class="card-text"><small>Example: {{ word.example_sentence }}</small></p>
+                                
+                                <form class="mt-3 sentence-form" method="POST" action="{{ url_for('submit_sentence') }}">
+                                    <input type="hidden" name="vocabulary_id" value="{{ word.id }}">
+                                    <div class="form-group">
+                                        <label for="sentence-{{ word.id }}" class="form-label">
+                                            Write a sentence using this word:
+                                        </label>
+                                        <textarea class="form-control" id="sentence-{{ word.id }}" 
+                                                  name="sentence" rows="2" 
+                                                  {% if word.id in completed_sentences %}disabled{% endif %}>
+                                            {{- completed_sentences.get(word.id, {}).get('sentence', '') -}}
+                                        </textarea>
+                                    </div>
+                                    
+                                    {% if word.id in completed_sentences %}
+                                        <div class="mt-2">
+                                            <div class="feedback-box p-3 rounded 
+                                                {% if completed_sentences[word.id].correction %}
+                                                    bg-warning-subtle
+                                                {% else %}
+                                                    bg-success-subtle
+                                                {% endif %}">
+                                                {% if completed_sentences[word.id].correction %}
+                                                    <p class="mb-1"><strong>Suggested correction:</strong></p>
+                                                    <p class="mb-2">{{ completed_sentences[word.id].correction }}</p>
+                                                {% endif %}
+                                                <p class="mb-0"><strong>Feedback:</strong><br>
+                                                    {{ completed_sentences[word.id].feedback }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-primary mt-2"
+                                                onclick="enableEditing('{{ word.id }}')">
+                                            Try Again
+                                        </button>
+                                    {% else %}
+                                        <button type="submit" class="btn btn-primary mt-2">Submit</button>
+                                    {% endif %}
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function enableEditing(wordId) {
+    const textarea = document.getElementById(`sentence-${wordId}`);
+    textarea.disabled = false;
+    textarea.focus();
+    // Update the form to show submit button again
+    const form = textarea.closest('form');
+    const feedbackBox = form.querySelector('.feedback-box');
+    const tryAgainBtn = form.querySelector('button');
+    
+    feedbackBox.style.display = 'none';
+    tryAgainBtn.outerHTML = '<button type="submit" class="btn btn-primary mt-2">Submit</button>';
+}
+</script>
+{% endblock %}

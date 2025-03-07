@@ -1,6 +1,7 @@
 import os
 import logging
 import random
+import json
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
@@ -41,7 +42,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Import models after db initialization
-from models import User, Progress, Chat, VocabularyItem, VocabularyProgress, UserPreferences
+from models import User, Progress, Chat, VocabularyItem, VocabularyProgress, UserPreferences, DailyVocabulary, SentencePractice
 from forms import LoginForm, RegisterForm, UserPreferencesForm
 from utils.openai_helper import chat_with_ai, transcribe_audio
 
@@ -222,7 +223,6 @@ def save_progress():
         logger.error(f"Progress save error: {str(e)}")
         return jsonify({'error': 'Failed to save progress'}), 500
 
-# Add these routes after your existing routes
 @app.route('/vocabulary')
 @login_required
 def vocabulary():
@@ -373,6 +373,109 @@ def preferences():
 
     return render_template('preferences.html', form=form)
 
+
+@app.route('/daily-practice')
+@login_required
+def daily_practice():
+    # Get or create today's vocabulary set
+    today = datetime.utcnow().date()
+    daily_set = DailyVocabulary.query.filter_by(
+        user_id=current_user.id,
+        date=today
+    ).first()
+
+    if not daily_set:
+        # Create new daily set based on user's level
+        daily_set = DailyVocabulary(user_id=current_user.id, date=today)
+
+        # Get user's skill level
+        user_level = current_user.preferences.skill_level
+        difficulty_map = {
+            'beginner': 1,
+            'intermediate': 2,
+            'advanced': 3
+        }
+        difficulty = difficulty_map.get(user_level, 1)
+
+        # Get vocabulary items matching user's level and language
+        words = VocabularyItem.query.filter_by(
+            language=current_user.preferences.target_language,
+            difficulty=difficulty
+        ).order_by(db.func.random()).limit(10).all()
+
+        daily_set.vocabulary_items.extend(words)
+        db.session.add(daily_set)
+        db.session.commit()
+
+    # Get completed sentences for today
+    completed_sentences = {}
+    sentences = SentencePractice.query.filter(
+        SentencePractice.user_id == current_user.id,
+        SentencePractice.vocabulary_item_id.in_([w.id for w in daily_set.vocabulary_items])
+    ).all()
+
+    for sentence in sentences:
+        completed_sentences[sentence.vocabulary_item_id] = {
+            'sentence': sentence.sentence,
+            'correction': sentence.correction,
+            'feedback': sentence.feedback
+        }
+
+    return render_template('daily_practice.html',
+                         daily_set=daily_set,
+                         completed_sentences=completed_sentences)
+
+@app.route('/submit-sentence', methods=['POST'])
+@login_required
+def submit_sentence():
+    try:
+        vocabulary_id = request.form.get('vocabulary_id')
+        sentence = request.form.get('sentence', '').strip()
+
+        if not vocabulary_id or not sentence:
+            flash('Please provide a sentence.', 'error')
+            return redirect(url_for('daily_practice'))
+
+        # Get the vocabulary item
+        vocab_item = VocabularyItem.query.get_or_404(vocabulary_id)
+
+        # Use OpenAI to check the sentence and provide feedback
+        prompt = f"""
+        As a language tutor, evaluate this sentence using the word '{vocab_item.word}' 
+        in {vocab_item.language}. The student's level is {current_user.preferences.skill_level}.
+
+        Sentence: {sentence}
+
+        Provide feedback in JSON format:
+        {{
+            "is_correct": true/false,
+            "correction": "corrected sentence if needed, otherwise null",
+            "feedback": "detailed feedback and suggestions"
+        }}
+        """
+
+        response = chat_with_ai(prompt)
+        feedback_data = json.loads(response)
+
+        # Save the practice attempt
+        practice = SentencePractice(
+            user_id=current_user.id,
+            vocabulary_item_id=vocabulary_id,
+            sentence=sentence,
+            correction=feedback_data.get('correction'),
+            feedback=feedback_data.get('feedback')
+        )
+
+        db.session.add(practice)
+        db.session.commit()
+
+        flash('Sentence submitted successfully!', 'success')
+        return redirect(url_for('daily_practice'))
+
+    except Exception as e:
+        logger.error(f"Error submitting sentence: {str(e)}")
+        flash('An error occurred while submitting your sentence.', 'error')
+        return redirect(url_for('daily_practice'))
 
 from werkzeug.security import generate_password_hash, check_password_hash
 

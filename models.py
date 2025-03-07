@@ -11,6 +11,8 @@ class User(UserMixin, db.Model):
     chats = db.relationship('Chat', backref='user', lazy=True)
     vocabulary_progress = db.relationship('VocabularyProgress', backref='user', lazy=True)
     preferences = db.relationship('UserPreferences', backref='user', uselist=False)
+    daily_vocabulary = db.relationship('DailyVocabulary', backref='user', lazy=True)
+    sentence_practices = db.relationship('SentencePractice', backref='user', lazy=True)
 
 class UserPreferences(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -46,6 +48,8 @@ class VocabularyItem(db.Model):
     example_sentence = db.Column(db.Text)
     audio_url = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    daily_sets = db.relationship('DailyVocabulary', secondary='daily_vocabulary_items', backref=db.backref('vocabulary_items', lazy=True))
+
 
 class VocabularyProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -55,3 +59,37 @@ class VocabularyProgress(db.Model):
     last_reviewed = db.Column(db.DateTime, default=datetime.utcnow)
     review_count = db.Column(db.Integer, default=0)
     next_review = db.Column(db.DateTime, default=datetime.utcnow)
+
+class DailyVocabulary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
+    completed = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Define relationship to User
+    user = db.relationship('User', backref=db.backref('daily_vocabulary', lazy=True))
+
+    # Define relationship to vocabulary items
+    vocabulary_items = db.relationship('VocabularyItem',
+                                     secondary='daily_vocabulary_items',
+                                     backref='daily_sets')
+
+# Association table for daily vocabulary items
+daily_vocabulary_items = db.Table('daily_vocabulary_items',
+    db.Column('daily_vocab_id', db.Integer, db.ForeignKey('daily_vocabulary.id'), primary_key=True),
+    db.Column('vocabulary_item_id', db.Integer, db.ForeignKey('vocabulary_item.id'), primary_key=True)
+)
+
+class SentencePractice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    vocabulary_item_id = db.Column(db.Integer, db.ForeignKey('vocabulary_item.id'), nullable=False)
+    sentence = db.Column(db.Text, nullable=False)
+    correction = db.Column(db.Text)
+    feedback = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Define relationships
+    user = db.relationship('User', backref=db.backref('sentence_practices', lazy=True))
+    vocabulary_item = db.relationship('VocabularyItem')
