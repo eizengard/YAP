@@ -9,6 +9,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     progress = db.relationship('Progress', backref='user', lazy=True)
     chats = db.relationship('Chat', backref='user', lazy=True)
+    vocabulary_progress = db.relationship('VocabularyProgress', backref='user', lazy=True)
 
 class Progress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -23,3 +24,23 @@ class Chat(db.Model):
     message = db.Column(db.Text, nullable=False)
     response = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+class VocabularyItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    word = db.Column(db.String(100), nullable=False)
+    translation = db.Column(db.String(100), nullable=False)
+    language = db.Column(db.String(10), nullable=False)  # e.g., 'es', 'en', 'it'
+    category = db.Column(db.String(50), nullable=False)  # e.g., 'greetings', 'food', 'numbers'
+    difficulty = db.Column(db.Integer, default=1)  # 1: beginner, 2: intermediate, 3: advanced
+    example_sentence = db.Column(db.Text)
+    audio_url = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class VocabularyProgress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    vocabulary_id = db.Column(db.Integer, db.ForeignKey('vocabulary_item.id'), nullable=False)
+    proficiency = db.Column(db.Integer, default=0)  # 0-100 score
+    last_reviewed = db.Column(db.DateTime, default=datetime.utcnow)
+    review_count = db.Column(db.Integer, default=0)
+    next_review = db.Column(db.DateTime, default=datetime.utcnow)

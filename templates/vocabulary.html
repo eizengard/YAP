@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12 mb-4">
+            <h2>Vocabulary Practice</h2>
+            <div class="progress mb-3">
+                <div class="progress-bar" role="progressbar" style="width: {{ progress }}%"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <!-- Categories sidebar -->
+            <div class="list-group">
+                {% for category in categories %}
+                <a href="{{ url_for('vocabulary', category=category.name) }}" 
+                   class="list-group-item list-group-item-action {% if current_category == category.name %}active{% endif %}">
+                    {{ category.name }}
+                    <span class="badge bg-primary rounded-pill float-end">{{ category.count }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <!-- Vocabulary exercises area -->
+            <div class="card">
+                <div class="card-body">
+                    <div id="vocabulary-exercise" class="text-center">
+                        <!-- Exercise content will be loaded here -->
+                    </div>
+
+                    <div class="mt-4 d-flex justify-content-between">
+                        <button id="prev-word" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Previous
+                        </button>
+                        <div class="d-flex gap-2">
+                            <button id="play-audio" class="btn btn-info">
+                                <i class="bi bi-volume-up"></i>
+                            </button>
+                            <button id="show-hint" class="btn btn-warning">
+                                <i class="bi bi-lightbulb"></i> Hint
+                            </button>
+                        </div>
+                        <button id="next-word" class="btn btn-primary">
+                            Next <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Practice modes -->
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Flashcards</h5>
+                            <p class="card-text">Review vocabulary with flashcards</p>
+                            <button class="btn btn-primary start-practice" data-mode="flashcards">
+                                Start Practice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Multiple Choice</h5>
+                            <p class="card-text">Test your knowledge with multiple choice questions</p>
+                            <button class="btn btn-primary start-practice" data-mode="multiple-choice">
+                                Start Practice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Typing Practice</h5>
+                            <p class="card-text">Practice spelling and typing</p>
+                            <button class="btn btn-primary start-practice" data-mode="typing">
+                                Start Practice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/vocabulary.js') }}"></script>
+{% endblock %}

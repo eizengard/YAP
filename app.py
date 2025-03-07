@@ -1,13 +1,13 @@
 import os
 import logging
+import random
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from gtts import gTTS
 import tempfile
-from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -41,7 +41,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Import models after db initialization
-from models import User, Progress, Chat
+from models import User, Progress, Chat, VocabularyItem, VocabularyProgress
 from forms import LoginForm, RegisterForm
 from utils.openai_helper import chat_with_ai, transcribe_audio
 
@@ -217,6 +217,127 @@ def save_progress():
     except Exception as e:
         logger.error(f"Progress save error: {str(e)}")
         return jsonify({'error': 'Failed to save progress'}), 500
+
+# Add these routes after your existing routes
+@app.route('/vocabulary')
+@login_required
+def vocabulary():
+    categories = db.session.query(
+        VocabularyItem.category,
+        db.func.count(VocabularyItem.id).label('count')
+    ).group_by(VocabularyItem.category).all()
+
+    categories = [{'name': cat, 'count': count} for cat, count in categories]
+    current_category = request.args.get('category', categories[0]['name'] if categories else None)
+
+    return render_template('vocabulary.html',
+                         categories=categories,
+                         current_category=current_category)
+
+@app.route('/api/vocabulary/exercise')
+@login_required
+def get_vocabulary_exercise():
+    try:
+        mode = request.args.get('mode', 'flashcards')
+        category = request.args.get('category')
+
+        # Get user's vocabulary progress
+        progress = VocabularyProgress.query.filter_by(user_id=current_user.id).all()
+        reviewed_ids = [p.vocabulary_id for p in progress]
+
+        # Prioritize words that haven't been reviewed or have low proficiency
+        query = VocabularyItem.query
+        if category:
+            query = query.filter_by(category=category)
+
+        if reviewed_ids:
+            # Mix of new and review words
+            if random.random() < 0.7:  # 70% chance of new words
+                word = query.filter(~VocabularyItem.id.in_(reviewed_ids))\
+                          .order_by(db.func.random()).first()
+            else:
+                # Review words with low proficiency
+                progress_ids = [p.vocabulary_id for p in progress if p.proficiency < 70]
+                word = query.filter(VocabularyItem.id.in_(progress_ids))\
+                          .order_by(db.func.random()).first()
+        else:
+            word = query.order_by(db.func.random()).first()
+
+        if not word:
+            return jsonify({'error': 'No vocabulary items available'}), 404
+
+        response = {
+            'id': word.id,
+            'word': word.word,
+            'translation': word.translation,
+            'language': word.language,
+            'example_sentence': word.example_sentence,
+        }
+
+        # Add distractors for multiple choice
+        if mode == 'multiple-choice':
+            distractors = VocabularyItem.query\
+                .filter(VocabularyItem.id != word.id)\
+                .order_by(db.func.random())\
+                .limit(3)\
+                .all()
+            response['distractors'] = [d.translation for d in distractors]
+
+        return jsonify(response)
+
+    except Exception as e:
+        logger.error(f"Error getting vocabulary exercise: {str(e)}")
+        return jsonify({'error': 'Failed to load exercise'}), 500
+
+@app.route('/api/vocabulary/progress', methods=['POST'])
+@login_required
+def save_vocabulary_progress():
+    try:
+        data = request.json
+        vocabulary_id = data['vocabulary_id']
+        is_correct = data['correct']
+
+        progress = VocabularyProgress.query\
+            .filter_by(user_id=current_user.id, vocabulary_id=vocabulary_id)\
+            .first()
+
+        if not progress:
+            progress = VocabularyProgress(
+                user_id=current_user.id,
+                vocabulary_id=vocabulary_id
+            )
+            db.session.add(progress)
+
+        # Update proficiency
+        if is_correct:
+            progress.proficiency = min(100, progress.proficiency + 10)
+        else:
+            progress.proficiency = max(0, progress.proficiency - 5)
+
+        progress.review_count += 1
+        progress.last_reviewed = datetime.utcnow()
+
+        # Set next review based on proficiency
+        if progress.proficiency >= 90:
+            days = 30
+        elif progress.proficiency >= 70:
+            days = 14
+        elif progress.proficiency >= 50:
+            days = 7
+        else:
+            days = 1
+
+        progress.next_review = datetime.utcnow() + timedelta(days=days)
+
+        db.session.commit()
+        return jsonify({'status': 'success'})
+
+    except Exception as e:
+        logger.error(f"Error saving vocabulary progress: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to save progress'}), 500
+
+from werkzeug.security import generate_password_hash, check_password_hash
 
 with app.app_context():
     # Create all database tables
