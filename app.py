@@ -626,7 +626,9 @@ def generate_vocabulary():
         """
 
         # Get response from OpenAI
+        logger.debug(f"Sending message to OpenAI: {prompt}")
         response = chat_with_ai(prompt)
+        logger.debug(f"Received response from OpenAI: {response}")
         data = json.loads(response)
 
         # Save new vocabulary items
@@ -664,10 +666,13 @@ def generate_vocabulary():
 
         return jsonify({'status': 'success', 'message': 'Vocabulary generated successfully'})
 
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {str(e)}, Response: {response}")
+        return jsonify({'error': 'Invalid response format from AI'}), 500
     except Exception as e:
         logger.error(f"Error generating vocabulary: {str(e)}")
         db.session.rollback()
-        return jsonify({'error': 'Failed to generate vocabulary'}), 500
+        return jsonify({'error': str(e)}), 500
 
 with app.app_context():
     # Create all database tables

@@ -30,7 +30,8 @@ def chat_with_ai(message):
                 "content": message
             }],
             temperature=0.7,
-            max_tokens=150)
+            max_tokens=1000,  # Increased token limit for vocabulary generation
+            response_format={"type": "text"})  # Allow free-form text for vocabulary generation
 
         if not completion.choices or not completion.choices[0].message:
             logger.error("No valid response received from OpenAI")
