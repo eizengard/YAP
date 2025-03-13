@@ -6,10 +6,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let recordedBlob = null;
     let currentPromptIndex = 0;
     let prompts = [];
+    let audioStream = null;
 
     const startRecordingBtn = document.getElementById('start-recording');
     const stopRecordingBtn = document.getElementById('stop-recording');
     const playRecordingBtn = document.getElementById('play-recording');
+    const submitRecordingBtn = document.getElementById('submit-recording');
     const playExampleBtn = document.getElementById('play-example');
     const recordingTimerDisplay = document.getElementById('recording-timer');
     const practiceArea = document.getElementById('practice-area');
@@ -55,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset recording interface
         stopRecordingBtn.disabled = true;
         playRecordingBtn.disabled = true;
+        submitRecordingBtn.disabled = true;
         startRecordingBtn.disabled = false;
         document.getElementById('feedback-area').style.display = 'none';
         document.getElementById('hint-area').style.display = 'none';
@@ -62,14 +65,21 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update navigation buttons
         prevExerciseBtn.disabled = currentPromptIndex === 0;
         nextExerciseBtn.disabled = currentPromptIndex === prompts.length - 1;
+
+        // Reset recording state
+        recordedBlob = null;
+        if (audioStream) {
+            audioStream.getTracks().forEach(track => track.stop());
+            audioStream = null;
+        }
     }
 
     // Recording functionality
     startRecordingBtn.addEventListener('click', async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioChunks = [];
-            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder = new MediaRecorder(audioStream);
 
             mediaRecorder.addEventListener('dataavailable', event => {
                 audioChunks.push(event.data);
@@ -78,13 +88,17 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaRecorder.addEventListener('stop', () => {
                 recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 playRecordingBtn.disabled = false;
-                submitRecording(recordedBlob);
+                submitRecordingBtn.disabled = false;
+
+                // Stop all tracks
+                audioStream.getTracks().forEach(track => track.stop());
             });
 
             // Start recording
             mediaRecorder.start();
             startRecordingBtn.disabled = true;
             stopRecordingBtn.disabled = false;
+            submitRecordingBtn.disabled = true;
             recordingTimerDisplay.style.display = 'inline-block';
             startTimer();
 
@@ -106,8 +120,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     playRecordingBtn.addEventListener('click', () => {
         if (recordedBlob) {
-            const audio = new Audio(URL.createObjectURL(recordedBlob));
-            audio.play();
+            const audioURL = URL.createObjectURL(recordedBlob);
+            const audio = new Audio(audioURL);
+
+            audio.onended = () => {
+                URL.revokeObjectURL(audioURL);
+            };
+
+            audio.play().catch(error => {
+                console.error('Error playing audio:', error);
+                alert('Failed to play recording. Please try again.');
+            });
+        }
+    });
+
+    submitRecordingBtn.addEventListener('click', () => {
+        if (recordedBlob) {
+            submitRecording(recordedBlob);
+            submitRecordingBtn.disabled = true;
         }
     });
 
@@ -155,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Failed to submit recording:', error);
             alert('Failed to submit recording. Please try again.');
+            submitRecordingBtn.disabled = false;
         }
     }
 
@@ -215,7 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
     }
 
-    // Add this function after the playExampleBtn click event handler
     async function generateAndPlayExample(text, language) {
         try {
             const response = await fetch('/api/speaking/example-audio', {
