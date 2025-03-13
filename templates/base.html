@@ -31,6 +31,33 @@
                 </ul>
                 <ul class="navbar-nav">
                     {% if current_user.is_authenticated %}
+                    {% if current_user.preferences %}
+                    <li class="nav-item">
+                        <span class="nav-link">
+                            <span class="badge bg-primary">
+                                {% set lang_names = {
+                                    'es': 'Spanish',
+                                    'fr': 'French',
+                                    'de': 'German',
+                                    'it': 'Italian',
+                                    'pt': 'Portuguese',
+                                    'ja': 'Japanese',
+                                    'ko': 'Korean',
+                                    'zh': 'Mandarin Chinese',
+                                    'ru': 'Russian',
+                                    'ar': 'Arabic',
+                                    'nl': 'Dutch',
+                                    'pl': 'Polish',
+                                    'tr': 'Turkish',
+                                    'hi': 'Hindi',
+                                    'vi': 'Vietnamese'
+                                } %}
+                                <i class="bi bi-translate"></i> 
+                                Learning {{ lang_names[current_user.preferences.target_language] }}
+                            </span>
+                        </span>
+                    </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('profile') }}">
                             <i class="bi bi-person-circle"></i> Profile
