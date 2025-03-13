@@ -52,6 +52,32 @@ def load_user(user_id):
 
 @app.route('/')
 def index():
+    if current_user.is_authenticated:
+        # Get today's vocabulary set if user is logged in
+        today = datetime.utcnow().date()
+        daily_set = DailyVocabulary.query.filter_by(
+            user_id=current_user.id,
+            date=today
+        ).first()
+
+        # Get completed sentences
+        completed_sentences = {}
+        if daily_set:
+            sentences = SentencePractice.query.filter(
+                SentencePractice.user_id == current_user.id,
+                SentencePractice.vocabulary_item_id.in_([w.id for w in daily_set.vocabulary_items])
+            ).all()
+
+            for sentence in sentences:
+                completed_sentences[sentence.vocabulary_item_id] = {
+                    'sentence': sentence.sentence,
+                    'correction': sentence.correction,
+                    'feedback': sentence.feedback
+                }
+
+        return render_template('index.html', 
+                            daily_set=daily_set,
+                            completed_sentences=completed_sentences)
     return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])

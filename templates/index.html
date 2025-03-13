@@ -5,27 +5,209 @@
     <div class="col-md-8 text-center">
         <h1 class="display-4 mb-4">Welcome to Language Learner</h1>
         <p class="lead">Start your language learning journey today with our interactive platform.</p>
-        
-        <div class="row mt-5">
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title">Chat Practice</h5>
-                        <p class="card-text">Practice conversations with our AI language tutor.</p>
-                        <a href="{{ url_for('chat') }}" class="btn btn-primary">Start Chatting</a>
-                    </div>
+    </div>
+</div>
+
+{% if current_user.is_authenticated %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">Today's Practice Words</h3>
+                    {% if daily_set %}
+                        <div>
+                            <button id="generate-vocab-btn" class="btn btn-primary">Generate New Words</button>
+                            <span class="badge bg-primary ms-2">{{ daily_set.vocabulary_items|length }}/10 words</span>
+                        </div>
+                    {% endif %}
                 </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title">Language Exercises</h5>
-                        <p class="card-text">Complete exercises to improve your skills.</p>
-                        <a href="{{ url_for('exercises') }}" class="btn btn-primary">Start Exercises</a>
-                    </div>
+                <div class="card-body">
+                    {% if daily_set and daily_set.vocabulary_items %}
+                        <div class="progress mb-4">
+                            <div class="progress-bar" role="progressbar" 
+                                 style="width: {{ (completed_sentences|length / 10) * 100 }}%"
+                                 aria-valuenow="{{ completed_sentences|length }}" 
+                                 aria-valuemin="0" aria-valuemax="10">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            {% for word in daily_set.vocabulary_items[:3] %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5 class="card-title">
+                                                <span class="translatable" 
+                                                      data-source-lang="{{ word.language }}" 
+                                                      data-target-lang="en" 
+                                                      data-text="{{ word.word }}">
+                                                    {{ word.word }}
+                                                </span>
+                                                <button class="btn btn-sm btn-secondary ms-2" onclick="playAudio(this, '{{ word.word }}', '{{ word.language }}')">
+                                                    <i class="bi bi-volume-up"></i>
+                                                </button>
+                                            </h5>
+                                            <p class="card-text text-muted">{{ word.translation }}</p>
+                                            <p class="card-text">
+                                                <small>
+                                                    <span class="translatable"
+                                                          data-source-lang="{{ word.language }}"
+                                                          data-target-lang="en"
+                                                          data-text="{{ word.example_sentence }}">
+                                                        {{ word.example_sentence }}
+                                                    </span>
+                                                    <button class="btn btn-sm btn-secondary ms-2" onclick="playAudio(this, '{{ word.example_sentence }}', '{{ word.language }}')">
+                                                        <i class="bi bi-volume-up"></i>
+                                                    </button>
+                                                </small>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="text-center mt-3">
+                            <a href="{{ url_for('daily_practice') }}" class="btn btn-primary">
+                                Continue Practice <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <p class="lead mb-4">No vocabulary words for today yet!</p>
+                            <button id="generate-vocab-btn" class="btn btn-primary btn-lg">
+                                Generate Today's Words
+                            </button>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
-</div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Chat Practice</h5>
+                    <p class="card-text">Practice conversations with our AI language tutor.</p>
+                    <a href="{{ url_for('chat') }}" class="btn btn-primary">Start Chatting</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Language Exercises</h5>
+                    <p class="card-text">Complete exercises to improve your skills.</p>
+                    <a href="{{ url_for('exercises') }}" class="btn btn-primary">Start Exercises</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="row mt-5">
+        <div class="col-md-6 mx-auto text-center">
+            <div class="card">
+                <div class="card-body">
+                    <h2>Get Started</h2>
+                    <p class="lead">Create an account to begin your language learning journey.</p>
+                    <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Sign Up Now</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const generateBtn = document.getElementById('generate-vocab-btn');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', async function() {
+            try {
+                generateBtn.disabled = true;
+                generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
+
+                const response = await fetch('/api/generate-vocabulary', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate vocabulary');
+                }
+
+                // Reload the page to show new vocabulary
+                window.location.reload();
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to generate vocabulary. Please try again.');
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = 'Generate New Words';
+            }
+        });
+    }
+});
+
+async function playAudio(button, text, lang) {
+    try {
+        button.disabled = true;
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+        // Detect if the text contains mostly Spanish or Italian words
+        const hasSpanish = /[áéíóúñ¿¡]/i.test(text) || /hola|gracias|por favor/i.test(text);
+        const hasItalian = /[àèéìíòóùú]/i.test(text) || /ciao|grazie|prego/i.test(text);
+
+        // Choose language and accent based on content
+        let accent = 'com'; // Default to US English
+        if (hasSpanish) {
+            accent = 'es'; // Spanish accent
+        } else if (hasItalian) {
+            accent = 'it'; // Italian accent
+        }
+
+        const response = await fetch('/api/text-to-speech', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                text: text,
+                lang: lang,
+                accent: accent
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate audio');
+        }
+
+        const data = await response.json();
+        const audio = new Audio(data.audio_url);
+
+        audio.onended = () => {
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        };
+
+        audio.onerror = () => {
+            console.error('Audio playback failed');
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        };
+
+        await audio.play();
+    } catch (error) {
+        console.error('TTS error:', error);
+        button.innerHTML = '<i class="bi bi-volume-up"></i>';
+        button.disabled = false;
+    }
+}
+</script>
 {% endblock %}
