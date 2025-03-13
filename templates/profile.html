@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <!-- User Info Card -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <i class="bi bi-person-circle" style="font-size: 4rem;"></i>
+                        <h3 class="mt-2">{{ current_user.username }}</h3>
+                        <p class="text-muted">{{ current_user.email }}</p>
+                    </div>
+                    <hr>
+                    <h5>Learning Preferences</h5>
+                    {% if current_user.preferences %}
+                    <ul class="list-unstyled">
+                        <li><strong>Target Language:</strong> 
+                            {% set lang_names = {
+                                'es': 'Spanish',
+                                'fr': 'French',
+                                'de': 'German',
+                                'it': 'Italian',
+                                'pt': 'Portuguese'
+                            } %}
+                            {{ lang_names[current_user.preferences.target_language] }}
+                        </li>
+                        <li><strong>Skill Level:</strong> {{ current_user.preferences.skill_level.title() }}</li>
+                        <li><strong>Daily Practice Goal:</strong> {{ current_user.preferences.practice_duration }} minutes</li>
+                    </ul>
+                    <div class="mt-3">
+                        <a href="{{ url_for('preferences', edit=True) }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-pencil"></i> Edit Preferences
+                        </a>
+                    </div>
+                    {% else %}
+                    <p>No preferences set. <a href="{{ url_for('preferences') }}">Set your preferences</a></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Stats -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Learning Progress</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-sm-4">
+                            <div class="text-center mb-3">
+                                <h6>Vocabulary</h6>
+                                <h2>{{ vocab_stats.total_words }}</h2>
+                                <small class="text-muted">Words Learned</small>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="text-center mb-3">
+                                <h6>Speaking</h6>
+                                <h2>{{ speaking_stats.total_attempts }}</h2>
+                                <small class="text-muted">Practice Sessions</small>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="text-center mb-3">
+                                <h6>Chat</h6>
+                                <h2>{{ chat_stats.total_messages }}</h2>
+                                <small class="text-muted">Conversations</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Activity</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% for activity in recent_activities %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ activity.description }}</h6>
+                                <small class="text-muted">{{ activity.timestamp|datetime }}</small>
+                            </div>
+                            <p class="mb-1">{{ activity.details }}</p>
+                        </div>
+                        {% else %}
+                        <p class="text-center text-muted my-3">No recent activity</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

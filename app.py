@@ -10,6 +10,7 @@ from sqlalchemy.orm import DeclarativeBase
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from gtts import gTTS
 import tempfile
+from sqlalchemy import func
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -910,6 +911,92 @@ def generate_example_audio():
     except Exception as e:
         logger.error(f"Error generating example audio: {str(e)}")
         return jsonify({'error': 'Failed to generate example audio'}), 500
+
+@app.route('/profile')
+@login_required
+def profile():
+    # Get vocabulary statistics
+    vocab_stats = {
+        'total_words': VocabularyProgress.query.filter_by(user_id=current_user.id).count(),
+        'mastered_words': VocabularyProgress.query.filter_by(
+            user_id=current_user.id
+        ).filter(VocabularyProgress.proficiency >= 90).count()
+    }
+
+    # Get speaking practice statistics
+    speaking_stats = {
+        'total_attempts': UserSpeakingAttempt.query.filter_by(user_id=current_user.id).count(),
+        'avg_score': db.session.query(
+            func.avg(UserSpeakingAttempt.pronunciation_score)
+        ).filter_by(user_id=current_user.id).scalar() or 0
+    }
+
+    # Get chat statistics
+    chat_stats = {
+        'total_messages': Chat.query.filter_by(user_id=current_user.id).count()
+    }
+
+    # Get recent activities
+    recent_activities = []
+
+    # Get recent speaking attempts
+    speaking_attempts = UserSpeakingAttempt.query.filter_by(
+        user_id=current_user.id
+    ).order_by(UserSpeakingAttempt.created_at.desc()).limit(3).all()
+
+    for attempt in speaking_attempts:
+        recent_activities.append({
+            'description': 'Speaking Practice',
+            'details': f'Completed a speaking exercise with score: {attempt.pronunciation_score:.1f}%',
+            'timestamp': attempt.created_at
+        })
+
+    # Get recent vocabulary progress
+    vocab_progress = VocabularyProgress.query.filter_by(
+        user_id=current_user.id
+    ).order_by(VocabularyProgress.last_reviewed.desc()).limit(3).all()
+
+    for progress in vocab_progress:
+        vocab = VocabularyItem.query.get(progress.vocabulary_id)
+        if vocab:
+            recent_activities.append({
+                'description': 'Vocabulary Practice',
+                'details': f'Reviewed word: {vocab.word} (Proficiency: {progress.proficiency}%)',
+                'timestamp': progress.last_reviewed
+            })
+
+    # Sort activities by timestamp
+    recent_activities.sort(key=lambda x: x['timestamp'], reverse=True)
+    recent_activities = recent_activities[:5]  # Keep only the 5 most recent activities
+
+    return render_template('profile.html',
+                         vocab_stats=vocab_stats,
+                         speaking_stats=speaking_stats,
+                         chat_stats=chat_stats,
+                         recent_activities=recent_activities)
+
+@app.template_filter('datetime')
+def format_datetime(value):
+    """Format a datetime object to a readable string."""
+    if not value:
+        return ''
+
+    now = datetime.utcnow()
+    diff = now - value
+
+    if diff < timedelta(minutes=1):
+        return 'just now'
+    elif diff < timedelta(hours=1):
+        minutes = int(diff.total_seconds() / 60)
+        return f'{minutes} minute{"s" if minutes != 1 else ""} ago'
+    elif diff < timedelta(days=1):
+        hours = int(diff.total_seconds() / 3600)
+        return f'{hours} hour{"s" if hours != 1 else ""} ago'
+    elif diff < timedelta(days=30):
+        days = diff.days
+        return f'{days} day{"s" if days != 1 else ""} ago'
+    else:
+        return value.strftime('%B %d, %Y')
 
 with app.app_context():
     # Create all database tables
