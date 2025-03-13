@@ -379,17 +379,27 @@ def preferences():
     form = UserPreferencesForm()
     if form.validate_on_submit():
         try:
+            logger.debug(f"Form submitted with data: {form.data}")
             # Update existing preferences or create new ones
-            preferences = current_user.preferences or UserPreferences(user_id=current_user.id)
+            preferences = UserPreferences.query.filter_by(user_id=current_user.id).first()
+            if not preferences:
+                logger.debug("Creating new preferences")
+                preferences = UserPreferences(user_id=current_user.id)
+                db.session.add(preferences)
+            else:
+                logger.debug("Updating existing preferences")
+
+            # Update the preferences fields
             preferences.target_language = form.target_language.data
             preferences.skill_level = form.skill_level.data
             preferences.practice_duration = form.practice_duration.data
             preferences.learning_goal = form.learning_goal.data
+            preferences.updated_at = datetime.utcnow()
 
-            if not current_user.preferences:
-                db.session.add(preferences)
-
+            logger.debug(f"About to commit preferences: {preferences.target_language}, {preferences.skill_level}")
             db.session.commit()
+            logger.debug("Preferences saved successfully")
+
             flash('Your preferences have been saved!', 'success')
             return redirect(url_for('profile'))
         except Exception as e:
@@ -893,7 +903,7 @@ def generate_example_audio():
         if not text:
             return jsonify({'error': 'No text provided'}), 400
 
-        # Configure TTS
+        #        # Configure TTS
         tts = gTTS(text=text, lang=lang, lang_check=True)
 
         # Create# Create temporary file with unique name
