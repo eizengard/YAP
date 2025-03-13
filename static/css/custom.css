@@ -151,3 +151,47 @@
     opacity: 0.7;
     transform: none;
 }
+
+/* Translation tooltip styles */
+.translatable {
+    position: relative;
+    cursor: help;
+    border-bottom: 1px dashed var(--bs-info);
+    display: inline-block;
+}
+
+.translation-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    background-color: var(--bs-dark);
+    color: var(--bs-light);
+    border: 1px solid var(--bs-info);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.translatable:hover .translation-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Add arrow to tooltip */
+.translation-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--bs-info) transparent transparent transparent;
+}

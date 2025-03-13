@@ -31,9 +31,25 @@
                         {% for word in daily_set.vocabulary_items %}
                         <div class="card mb-3">
                             <div class="card-body">
-                                <h5 class="card-title">{{ word.word }}</h5>
+                                <h5 class="card-title">
+                                    <span class="translatable" 
+                                          data-source-lang="{{ word.language }}" 
+                                          data-target-lang="en" 
+                                          data-text="{{ word.word }}">
+                                        {{ word.word }}
+                                    </span>
+                                </h5>
                                 <p class="card-text text-muted">{{ word.translation }}</p>
-                                <p class="card-text"><small>Example: {{ word.example_sentence }}</small></p>
+                                <p class="card-text">
+                                    <small>Example: 
+                                        <span class="translatable"
+                                              data-source-lang="{{ word.language }}"
+                                              data-target-lang="en"
+                                              data-text="{{ word.example_sentence }}">
+                                            {{ word.example_sentence }}
+                                        </span>
+                                    </small>
+                                </p>
 
                                 <form class="mt-3 sentence-form" method="POST" action="{{ url_for('submit_sentence') }}">
                                     <input type="hidden" name="vocabulary_id" value="{{ word.id }}">
@@ -86,12 +102,13 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/translation.js') }}"></script>
 <script>
 function enableEditing(wordId) {
     const textarea = document.getElementById(`sentence-${wordId}`);
     textarea.disabled = false;
     textarea.focus();
-    // Update the form to show submit button again
+
     const form = textarea.closest('form');
     const feedbackBox = form.querySelector('.feedback-box');
     const tryAgainBtn = form.querySelector('button');

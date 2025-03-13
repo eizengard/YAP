@@ -674,6 +674,40 @@ def generate_vocabulary():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/translate', methods=['POST'])
+@login_required
+def translate_text():
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        source_lang = data.get('source_lang')
+        target_lang = data.get('target_lang', 'en')  # Default to English
+
+        if not text or not source_lang:
+            return jsonify({'error': 'Missing required parameters'}), 400
+
+        # Create prompt for OpenAI
+        prompt = f"""
+        Translate the following text from {source_lang} to {target_lang}:
+        Text: {text}
+
+        Provide only the direct translation without any additional explanations.
+        If the text is already in the target language, return it unchanged.
+        """
+
+        translation = chat_with_ai(prompt).strip()
+
+        return jsonify({
+            'translation': translation,
+            'source_text': text,
+            'source_lang': source_lang,
+            'target_lang': target_lang
+        })
+
+    except Exception as e:
+        logger.error(f"Translation error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 with app.app_context():
     # Create all database tables
     db.create_all()
