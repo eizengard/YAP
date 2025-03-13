@@ -378,19 +378,25 @@ def preferences():
 
     form = UserPreferencesForm()
     if form.validate_on_submit():
-        # Update existing preferences or create new ones
-        preferences = current_user.preferences or UserPreferences(user_id=current_user.id)
-        preferences.target_language = form.target_language.data
-        preferences.skill_level = form.skill_level.data
-        preferences.practice_duration = form.practice_duration.data
-        preferences.learning_goal = form.learning_goal.data
+        try:
+            # Update existing preferences or create new ones
+            preferences = current_user.preferences or UserPreferences(user_id=current_user.id)
+            preferences.target_language = form.target_language.data
+            preferences.skill_level = form.skill_level.data
+            preferences.practice_duration = form.practice_duration.data
+            preferences.learning_goal = form.learning_goal.data
 
-        if not current_user.preferences:
-            db.session.add(preferences)
+            if not current_user.preferences:
+                db.session.add(preferences)
 
-        db.session.commit()
-        flash('Your preferences have been saved!', 'success')
-        return redirect(url_for('index'))
+            db.session.commit()
+            flash('Your preferences have been saved!', 'success')
+            return redirect(url_for('profile'))
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error saving preferences: {str(e)}")
+            flash('An error occurred while saving your preferences.', 'error')
+            return render_template('preferences.html', form=form)
 
     # If user has existing preferences, pre-fill the form
     elif current_user.preferences and request.method == 'GET':
@@ -890,7 +896,7 @@ def generate_example_audio():
         # Configure TTS
         tts = gTTS(text=text, lang=lang, lang_check=True)
 
-        # Create temporary file with unique name
+        # Create# Create temporary file with unique name
         audio_filename = f'example_{datetime.utcnow().timestamp()}.mp3'
         audio_path = os.path.join('static', 'audio','examples', audio_filename)
 
