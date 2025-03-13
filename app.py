@@ -2,6 +2,7 @@ import os
 import logging
 import random
 import json
+import tempfile
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
@@ -676,6 +677,178 @@ def initialize_speaking_scenarios():
         except Exception as e:
             db.session.rollback()
             logger.error(f"Error initializing speaking scenarios: {e}")
+
+@app.route('/api/speaking/scenario/<scenario_id>')
+@login_required
+def get_speaking_scenario(scenario_id):
+    try:
+        # Get scenario based on user's preferences and skill level
+        scenario = SpeakingExercise.query.filter_by(
+            category=scenario_id,
+            target_language=current_user.preferences.target_language,
+            difficulty=current_user.preferences.skill_level
+        ).first()
+
+        if not scenario:
+            # If no scenario exists for the exact level, get one close to user's level
+            scenario = SpeakingExercise.query.filter_by(
+                category=scenario_id,
+                target_language=current_user.preferences.target_language
+            ).first()
+
+        if not scenario:
+            return jsonify({'error': 'No scenario found'}), 404
+
+        # Get conversation prompts for the scenario
+        prompts = []
+        if scenario.category == 'restaurant':
+            prompts = [
+                "Hello! What would you like to order today?",
+                "Would you like any drinks with your meal?",
+                "Any special requests or dietary restrictions?",
+                "Would you like to order dessert?"
+            ]
+        elif scenario.category == 'travel':
+            prompts = [
+                "Excuse me, could you help me find the train station?",
+                "How long does it take to get there?",
+                "Are there any landmarks I should look for?",
+                "What's the best way to buy tickets?"
+            ]
+        elif scenario.category == 'greetings':
+            prompts = [
+                "Good morning! How are you today?",
+                "What did you do over the weekend?",
+                "Would you like to grab coffee sometime?",
+                "It was nice meeting you!"
+            ]
+
+        return jsonify({
+            'id': scenario.id,
+            'title': scenario.title,
+            'description': scenario.scenario,
+            'example_audio_url': scenario.example_audio_url,
+            'prompts': prompts,
+            'target_language': scenario.target_language
+        })
+
+    except Exception as e:
+        logger.error(f"Error loading speaking scenario: {str(e)}")
+        return jsonify({'error': 'Failed to load scenario'}), 500
+
+@app.route('/api/speaking/submit', methods=['POST'])
+@login_required
+def submit_speaking_practice():
+    try:
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+
+        audio_file = request.files['audio']
+        scenario_id = request.form.get('scenario_id')
+        prompt_index = request.form.get('prompt_index', 0)
+
+        if not scenario_id:
+            return jsonify({'error': 'No scenario ID provided'}), 400
+
+        # Save the audio file temporarily
+        temp_audio_path = os.path.join(tempfile.gettempdir(), f'speaking_{datetime.utcnow().timestamp()}.webm')
+        audio_file.save(temp_audio_path)
+
+        # Transcribe the audio using OpenAI's Whisper
+        transcription = transcribe_audio(temp_audio_path)
+        logger.debug(f"Transcription result: {transcription}")
+
+        # Get the scenario for comparison
+        scenario = SpeakingExercise.query.get(scenario_id)
+        if not scenario:
+            return jsonify({'error': 'Scenario not found'}), 404
+
+        # Create prompt for pronunciation feedback
+        prompt = f"""
+        As a language tutor for {scenario.target_language}, evaluate this spoken response:
+        Scenario: {scenario.scenario}
+        Student's transcribed response: {transcription}
+
+        Provide detailed feedback in JSON format:
+        {{
+            "pronunciation_score": float (0-100),
+            "pronunciation_feedback": "specific feedback about pronunciation and accent",
+            "grammar_feedback": "feedback about grammar usage",
+            "vocabulary_feedback": "feedback about word choice and vocabulary",
+            "fluency_score": float (0-100),
+            "improvement_suggestions": ["list", "of", "specific", "suggestions"],
+            "correct_response_example": "an example of a good response"
+        }}
+        """
+
+        feedback_response = chat_with_ai(prompt)
+        logger.debug(f"AI Feedback response: {feedback_response}")
+
+        try:
+            feedback_data = json.loads(feedback_response)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse AI feedback: {e}")
+            return jsonify({'error': 'Invalid feedback format'}), 500
+
+        # Save the attempt in the database
+        attempt = UserSpeakingAttempt(
+            user_id=current_user.id,
+            exercise_id=scenario_id,
+            audio_recording_url=temp_audio_path,
+            pronunciation_score=feedback_data['pronunciation_score'],
+            feedback=json.dumps(feedback_data)
+        )
+
+        db.session.add(attempt)
+        db.session.commit()
+
+        # Clean up temporary audio file
+        try:
+            os.remove(temp_audio_path)
+        except Exception as e:
+            logger.warning(f"Failed to remove temporary audio file: {e}")
+
+        return jsonify(feedback_data)
+
+    except Exception as e:
+        logger.error(f"Error processing speaking submission: {str(e)}")
+        return jsonify({'error': 'Failed to process submission'}), 500
+
+@app.route('/api/speaking/example-audio', methods=['POST'])
+@login_required
+def generate_example_audio():
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        lang = data.get('language', 'es')  # Default to Spanish
+
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+
+        # Configure TTS
+        tts = gTTS(text=text, lang=lang, lang_check=True)
+
+        # Create temporary file with unique name
+        audio_filename = f'example_{datetime.utcnow().timestamp()}.mp3'
+        audio_path = os.path.join('static', 'audio', 'examples', audio_filename)
+
+        # Ensure audio directory exists
+        os.makedirs(os.path.join('static', 'audio', 'examples'), exist_ok=True)
+
+        # Save the audio file
+        tts.save(audio_path)
+
+        # Return the URL path to the audio file
+        audio_url = url_for('static', filename=f'audio/examples/{audio_filename}')
+        return jsonify({
+            'audio_url': audio_url,
+            'text': text,
+            'language': lang
+        })
+
+    except Exception as e:
+        logger.error(f"Error generating example audio: {str(e)}")
+        return jsonify({'error': 'Failed to generate example audio'}), 500
 
 with app.app_context():
     # Create all database tables

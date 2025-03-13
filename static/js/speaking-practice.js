@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let recordingTimer;
     let currentScenario = null;
     let recordedBlob = null;
+    let currentPromptIndex = 0;
+    let prompts = [];
 
     const startRecordingBtn = document.getElementById('start-recording');
     const stopRecordingBtn = document.getElementById('stop-recording');
@@ -11,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const playExampleBtn = document.getElementById('play-example');
     const recordingTimerDisplay = document.getElementById('recording-timer');
     const practiceArea = document.getElementById('practice-area');
+    const nextExerciseBtn = document.getElementById('next-exercise');
+    const prevExerciseBtn = document.getElementById('prev-exercise');
 
     // Initialize scenario buttons
     document.querySelectorAll('.start-scenario').forEach(button => {
@@ -24,15 +28,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/speaking/scenario/${scenarioId}`);
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to load scenario');
             }
 
             currentScenario = data;
+            prompts = data.prompts;
+            currentPromptIndex = 0;
             displayScenario(data);
             practiceArea.style.display = 'block';
-            
+
             // Scroll to practice area
             practiceArea.scrollIntoView({ behavior: 'smooth' });
         } catch (error) {
@@ -43,13 +49,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayScenario(scenario) {
         document.getElementById('scenario-title').textContent = scenario.title;
-        document.getElementById('scenario-description').textContent = scenario.description;
-        
+        document.getElementById('scenario-description').textContent = 
+            `${scenario.description}\n\nPrompt: ${prompts[currentPromptIndex]}`;
+
         // Reset recording interface
         stopRecordingBtn.disabled = true;
         playRecordingBtn.disabled = true;
         startRecordingBtn.disabled = false;
         document.getElementById('feedback-area').style.display = 'none';
+
+        // Update navigation buttons
+        prevExerciseBtn.disabled = currentPromptIndex === 0;
+        nextExerciseBtn.disabled = currentPromptIndex === prompts.length - 1;
     }
 
     // Recording functionality
@@ -100,9 +111,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     playExampleBtn.addEventListener('click', async () => {
-        if (currentScenario && currentScenario.example_audio_url) {
-            const audio = new Audio(currentScenario.example_audio_url);
-            await audio.play();
+        if (currentScenario && prompts[currentPromptIndex]) {
+            playExampleBtn.disabled = true;
+            await generateAndPlayExample(prompts[currentPromptIndex], currentScenario.target_language);
+            playExampleBtn.disabled = false;
+        }
+    });
+
+    nextExerciseBtn.addEventListener('click', () => {
+        if (currentPromptIndex < prompts.length - 1) {
+            currentPromptIndex++;
+            displayScenario(currentScenario);
+        }
+    });
+
+    prevExerciseBtn.addEventListener('click', () => {
+        if (currentPromptIndex > 0) {
+            currentPromptIndex--;
+            displayScenario(currentScenario);
         }
     });
 
@@ -111,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
             formData.append('audio', blob);
             formData.append('scenario_id', currentScenario.id);
+            formData.append('prompt_index', currentPromptIndex);
 
             const response = await fetch('/api/speaking/submit', {
                 method: 'POST',
@@ -118,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to submit recording');
             }
@@ -140,15 +167,40 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.setAttribute('aria-valuenow', feedback.pronunciation_score);
         progressBar.textContent = `${Math.round(feedback.pronunciation_score)}%`;
 
-        // Display feedback text
+        // Display detailed feedback
         feedbackContent.innerHTML = `
             <div class="mt-3">
                 <h6>Pronunciation Feedback:</h6>
-                <p>${feedback.feedback}</p>
+                <p>${feedback.pronunciation_feedback}</p>
+
+                <h6>Grammar Feedback:</h6>
+                <p>${feedback.grammar_feedback}</p>
+
+                <h6>Vocabulary Feedback:</h6>
+                <p>${feedback.vocabulary_feedback}</p>
+
+                <h6>Fluency Score: ${Math.round(feedback.fluency_score)}%</h6>
+
+                <h6>Suggestions for Improvement:</h6>
+                <ul>
+                    ${feedback.improvement_suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
+                </ul>
+
+                <h6>Example Response:</h6>
+                <p class="text-success">${feedback.correct_response_example}</p>
             </div>
         `;
 
         feedbackArea.style.display = 'block';
+
+        // If the score is good, show confetti
+        if (feedback.pronunciation_score >= 80) {
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        }
     }
 
     function startTimer() {
@@ -160,5 +212,32 @@ document.addEventListener('DOMContentLoaded', () => {
             recordingTimerDisplay.textContent = 
                 `Recording: ${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }, 1000);
+    }
+
+    // Add this function after the playExampleBtn click event handler
+    async function generateAndPlayExample(text, language) {
+        try {
+            const response = await fetch('/api/speaking/example-audio', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    text: text,
+                    language: language
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate example audio');
+            }
+
+            const data = await response.json();
+            const audio = new Audio(data.audio_url);
+            await audio.play();
+        } catch (error) {
+            console.error('Error playing example:', error);
+            alert('Failed to play example audio. Please try again.');
+        }
     }
 });
