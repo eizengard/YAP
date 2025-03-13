@@ -699,29 +699,52 @@ def get_speaking_scenario(scenario_id):
         if not scenario:
             return jsonify({'error': 'No scenario found'}), 404
 
-        # Get conversation prompts for the scenario
+        # Get conversation prompts for the scenario based on language
         prompts = []
-        if scenario.category == 'restaurant':
-            prompts = [
-                "Hello! What would you like to order today?",
-                "Would you like any drinks with your meal?",
-                "Any special requests or dietary restrictions?",
-                "Would you like to order dessert?"
-            ]
-        elif scenario.category == 'travel':
-            prompts = [
-                "Excuse me, could you help me find the train station?",
-                "How long does it take to get there?",
-                "Are there any landmarks I should look for?",
-                "What's the best way to buy tickets?"
-            ]
-        elif scenario.category == 'greetings':
-            prompts = [
-                "Good morning! How are you today?",
-                "What did you do over the weekend?",
-                "Would you like to grab coffee sometime?",
-                "It was nice meeting you!"
-            ]
+        if scenario.target_language == 'es':  # Spanish prompts
+            if scenario.category == 'restaurant':
+                prompts = [
+                    "¡Hola! ¿Qué le gustaría ordenar hoy?",
+                    "¿Desea alguna bebida con su comida?",
+                    "¿Tiene alguna restricción dietética o pedido especial?",
+                    "¿Le gustaría ordenar postre?"
+                ]
+            elif scenario.category == 'travel':
+                prompts = [
+                    "Disculpe, ¿podría ayudarme a encontrar la estación de tren?",
+                    "¿Cuánto tiempo se tarda en llegar allí?",
+                    "¿Hay algún punto de referencia que deba buscar?",
+                    "¿Cuál es la mejor manera de comprar los billetes?"
+                ]
+            elif scenario.category == 'greetings':
+                prompts = [
+                    "¡Buenos días! ¿Cómo está hoy?",
+                    "¿Qué hizo durante el fin de semana?",
+                    "¿Le gustaría tomar un café algún día?",
+                    "¡Encantado de conocerle!"
+                ]
+        elif scenario.target_language == 'it':  # Italian prompts
+            if scenario.category == 'restaurant':
+                prompts = [
+                    "Buongiorno! Cosa desidera ordinare oggi?",
+                    "Vuole qualcosa da bere con il pasto?",
+                    "Ha delle restrizioni alimentari o richieste speciali?",
+                    "Desidera ordinare un dessert?"
+                ]
+            elif scenario.category == 'travel':
+                prompts = [
+                    "Scusi, può aiutarmi a trovare la stazione dei treni?",
+                    "Quanto tempo ci vuole per arrivarci?",
+                    "Ci sono dei punti di riferimento che devo cercare?",
+                    "Qual è il modo migliore per comprare i biglietti?"
+                ]
+            elif scenario.category == 'greetings':
+                prompts = [
+                    "Buongiorno! Come sta oggi?",
+                    "Cosa ha fatto durante il fine settimana?",
+                    "Le piacerebbe prendere un caffè qualche volta?",
+                    "È stato un piacere conoscerla!"
+                ]
 
         return jsonify({
             'id': scenario.id,
