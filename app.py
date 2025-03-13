@@ -699,8 +699,9 @@ def get_speaking_scenario(scenario_id):
         if not scenario:
             return jsonify({'error': 'No scenario found'}), 404
 
-        # Get conversation prompts for the scenario based on language
+        # Get conversation prompts and hints for the scenario based on language
         prompts = []
+        hints = []
         if scenario.target_language == 'es':  # Spanish prompts
             if scenario.category == 'restaurant':
                 prompts = [
@@ -709,6 +710,12 @@ def get_speaking_scenario(scenario_id):
                     "¿Tiene alguna restricción dietética o pedido especial?",
                     "¿Le gustaría ordenar postre?"
                 ]
+                hints = [
+                    "Me gustaría ordenar... / Quiero... / Para mí...",
+                    "Sí, me gustaría... / No, gracias. / ¿Tienen...?",
+                    "Soy vegetariano/a... / Soy alérgico/a a... / Sin...",
+                    "Sí, ¿qué postres tienen? / No, gracias. La cuenta, por favor."
+                ]
             elif scenario.category == 'travel':
                 prompts = [
                     "Disculpe, ¿podría ayudarme a encontrar la estación de tren?",
@@ -716,12 +723,24 @@ def get_speaking_scenario(scenario_id):
                     "¿Hay algún punto de referencia que deba buscar?",
                     "¿Cuál es la mejor manera de comprar los billetes?"
                 ]
+                hints = [
+                    "¿Puede decirme cómo llegar a...? / ¿Dónde está...?",
+                    "¿Está lejos? / ¿Cuántos minutos...?",
+                    "¿Qué edificios...? / ¿Paso por...?",
+                    "¿Dónde puedo comprar...? / ¿Hay una taquilla...?"
+                ]
             elif scenario.category == 'greetings':
                 prompts = [
                     "¡Buenos días! ¿Cómo está hoy?",
                     "¿Qué hizo durante el fin de semana?",
                     "¿Le gustaría tomar un café algún día?",
                     "¡Encantado de conocerle!"
+                ]
+                hints = [
+                    "Muy bien, gracias. / Estoy... / Todo bien...",
+                    "Fui a... / Estuve en... / Me quedé en casa...",
+                    "Sí, me encantaría. / ¿Qué le parece el...?",
+                    "¡Igualmente! / ¡Hasta pronto! / ¡Nos vemos!"
                 ]
         elif scenario.target_language == 'it':  # Italian prompts
             if scenario.category == 'restaurant':
@@ -731,12 +750,24 @@ def get_speaking_scenario(scenario_id):
                     "Ha delle restrizioni alimentari o richieste speciali?",
                     "Desidera ordinare un dessert?"
                 ]
+                hints = [
+                    "Vorrei ordinare... / Per me... / Prendo...",
+                    "Sì, vorrei... / No, grazie. / Avete...?",
+                    "Sono vegetariano/a... / Sono allergico/a a... / Senza...",
+                    "Sì, che dolci avete? / No, grazie. Il conto, per favore."
+                ]
             elif scenario.category == 'travel':
                 prompts = [
                     "Scusi, può aiutarmi a trovare la stazione dei treni?",
                     "Quanto tempo ci vuole per arrivarci?",
                     "Ci sono dei punti di riferimento che devo cercare?",
                     "Qual è il modo migliore per comprare i biglietti?"
+                ]
+                hints = [
+                    "Mi può dire come arrivare a...? / Dov'è...?",
+                    "È lontano? / Quanti minuti...?",
+                    "Quali edifici...? / Devo passare...?",
+                    "Dove posso comprare...? / C'è una biglietteria...?"
                 ]
             elif scenario.category == 'greetings':
                 prompts = [
@@ -745,6 +776,12 @@ def get_speaking_scenario(scenario_id):
                     "Le piacerebbe prendere un caffè qualche volta?",
                     "È stato un piacere conoscerla!"
                 ]
+                hints = [
+                    "Molto bene, grazie. / Sono... / Tutto bene...",
+                    "Sono andato/a a... / Sono stato/a a... / Sono rimasto/a a casa...",
+                    "Sì, mi piacerebbe molto. / Che ne dice...?",
+                    "Altrettanto! / Arrivederci! / Ci vediamo!"
+                ]
 
         return jsonify({
             'id': scenario.id,
@@ -752,6 +789,7 @@ def get_speaking_scenario(scenario_id):
             'description': scenario.scenario,
             'example_audio_url': scenario.example_audio_url,
             'prompts': prompts,
+            'hints': hints,
             'target_language': scenario.target_language
         })
 
@@ -853,7 +891,7 @@ def generate_example_audio():
 
         # Create temporary file with unique name
         audio_filename = f'example_{datetime.utcnow().timestamp()}.mp3'
-        audio_path = os.path.join('static', 'audio', 'examples', audio_filename)
+        audio_path = os.path.join('static', 'audio','examples', audio_filename)
 
         # Ensure audio directory exists
         os.makedirs(os.path.join('static', 'audio', 'examples'), exist_ok=True)

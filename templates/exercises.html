@@ -78,6 +78,14 @@
                                     <i class="bi bi-play-circle"></i> Play Recording
                                 </button>
                             </div>
+                            <div class="mb-3">
+                                <button class="btn btn-outline-info" id="show-hint">
+                                    <i class="bi bi-lightbulb"></i> Show Response Hints
+                                </button>
+                            </div>
+                            <div id="hint-area" class="alert alert-info" style="display: none;">
+                                <!-- Hints will be inserted here -->
+                            </div>
                             <div class="recording-status">
                                 <span id="recording-timer" class="badge bg-danger" style="display: none;">
                                     Recording: 0:00
@@ -93,7 +101,7 @@
                                     <div class="pronunciation-score mb-3">
                                         <label>Pronunciation Score:</label>
                                         <div class="progress">
-                                            <div id="pronunciation-progress" class="progress-bar bg-info" 
+                                            <div id="pronunciation-progress" class="progress-bar bg-info"
                                                  role="progressbar" style="width: 0%">
                                             </div>
                                         </div>

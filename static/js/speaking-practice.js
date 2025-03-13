@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
         playRecordingBtn.disabled = true;
         startRecordingBtn.disabled = false;
         document.getElementById('feedback-area').style.display = 'none';
+        document.getElementById('hint-area').style.display = 'none';
 
         // Update navigation buttons
         prevExerciseBtn.disabled = currentPromptIndex === 0;
@@ -240,4 +241,21 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Failed to play example audio. Please try again.');
         }
     }
+
+    // Initialize hint button
+    const showHintBtn = document.getElementById('show-hint');
+    const hintArea = document.getElementById('hint-area');
+
+    showHintBtn.addEventListener('click', () => {
+        if (currentScenario && currentScenario.hints && currentScenario.hints[currentPromptIndex]) {
+            const hints = currentScenario.hints[currentPromptIndex].split(' / ');
+            hintArea.innerHTML = `
+                <h6>Suggested Responses:</h6>
+                <ul class="mb-0">
+                    ${hints.map(hint => `<li>${hint}</li>`).join('')}
+                </ul>
+            `;
+            hintArea.style.display = 'block';
+        }
+    });
 });
