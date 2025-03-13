@@ -27,7 +27,7 @@ let currentExerciseIndex = 0;
 let score = 0;
 let answerChecked = false;
 
-// Function to display the current exercise
+// Function to display the current practice exercise
 function displayExercise() {
     const exerciseContainer = document.getElementById('exercise-container');
     const progressBar = document.getElementById('progress-bar');
@@ -61,7 +61,7 @@ function displayExercise() {
     exerciseHTML += `
             </div>
             <div class="mt-3 text-center">
-                <button class="btn btn-success" onclick="checkAnswer()">Check Answer</button>
+                <button class="btn btn-info" onclick="checkAnswer()">Check Answer</button>
             </div>
         </div>
     `;
@@ -150,9 +150,9 @@ function showResults() {
 
     exerciseContainer.innerHTML = `
         <div class="text-center">
-            <h2>Exercise Complete!</h2>
+            <h2>Practice Complete!</h2>
             <p class="lead">Your score: ${score}/${exercises.length} (${percentage}%)</p>
-            <button class="btn btn-primary mt-3" onclick="restartExercises()">Try Again</button>
+            <button class="btn btn-info mt-3" onclick="restartExercises()">Try Again</button>
         </div>
     `;
 
