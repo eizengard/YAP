@@ -38,6 +38,9 @@
                                           data-text="{{ word.word }}">
                                         {{ word.word }}
                                     </span>
+                                    <button class="btn btn-sm btn-secondary ms-2" onclick="playAudio(this, '{{ word.word }}', '{{ word.language }}')">
+                                        <i class="bi bi-volume-up"></i>
+                                    </button>
                                 </h5>
                                 <p class="card-text text-muted">{{ word.translation }}</p>
                                 <p class="card-text">
@@ -48,6 +51,9 @@
                                               data-text="{{ word.example_sentence }}">
                                             {{ word.example_sentence }}
                                         </span>
+                                        <button class="btn btn-sm btn-secondary ms-2" onclick="playAudio(this, '{{ word.example_sentence }}', '{{ word.language }}')">
+                                            <i class="bi bi-volume-up"></i>
+                                        </button>
                                     </small>
                                 </p>
 
@@ -147,5 +153,61 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+async function playAudio(button, text, lang) {
+    try {
+        button.disabled = true;
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+        // Detect if the text contains mostly Spanish or Italian words
+        const hasSpanish = /[áéíóúñ¿¡]/i.test(text) || /hola|gracias|por favor/i.test(text);
+        const hasItalian = /[àèéìíòóùú]/i.test(text) || /ciao|grazie|prego/i.test(text);
+
+        // Choose language and accent based on content
+        let accent = 'com'; // Default to US English
+        if (hasSpanish) {
+            accent = 'es'; // Spanish accent
+        } else if (hasItalian) {
+            accent = 'it'; // Italian accent
+        }
+
+        const response = await fetch('/api/text-to-speech', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                text: text,
+                lang: lang,
+                accent: accent
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate audio');
+        }
+
+        const data = await response.json();
+        const audio = new Audio(data.audio_url);
+
+        audio.onended = () => {
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        };
+
+        audio.onerror = () => {
+            console.error('Audio playback failed');
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        };
+
+        await audio.play();
+    } catch (error) {
+        console.error('TTS error:', error);
+        button.innerHTML = '<i class="bi bi-volume-up"></i>';
+        button.disabled = false;
+    }
+}
 </script>
 {% endblock %}
