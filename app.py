@@ -42,7 +42,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Import models after db initialization
-from models import User, Progress, Chat, VocabularyItem, VocabularyProgress, UserPreferences, DailyVocabulary, SentencePractice
+from models import User, Progress, Chat, VocabularyItem, VocabularyProgress, UserPreferences, DailyVocabulary, SentencePractice, SpeakingExercise, UserSpeakingAttempt
 from forms import LoginForm, RegisterForm, UserPreferencesForm
 from utils.openai_helper import chat_with_ai, transcribe_audio
 
@@ -617,125 +617,69 @@ def initialize_vocabulary():
             db.session.rollback()
             logger.error(f"Error initializing vocabulary: {e}")
 
-@app.route('/api/generate-vocabulary', methods=['POST'])
-@login_required
-def generate_vocabulary():
-    try:
-        if not current_user.preferences:
-            return jsonify({'error': 'User preferences not set'}), 400
+def initialize_speaking_scenarios():
+    """Initialize speaking scenarios if none exist."""
+    if SpeakingExercise.query.count() == 0:
+        scenarios = [
+            {
+                'title': 'Ordering at a Restaurant',
+                'scenario': 'You are at a restaurant and want to order your favorite meal. Practice ordering food, asking about ingredients, and making special requests.',
+                'difficulty': 'beginner',
+                'category': 'restaurant',
+                'target_language': 'es',
+            },
+            {
+                'title': 'Asking for Directions',
+                'scenario': 'You are lost in a city and need to find your way to the train station. Practice asking for directions and understanding the responses.',
+                'difficulty': 'beginner',
+                'category': 'travel',
+                'target_language': 'es',
+            },
+            {
+                'title': 'Daily Greetings',
+                'scenario': 'Practice common greetings and introductions for different times of day and situations.',
+                'difficulty': 'beginner',
+                'category': 'greetings',
+                'target_language': 'es',
+            },
+            # Italian scenarios
+            {
+                'title': 'Al Ristorante',
+                'scenario': 'Sei al ristorante e vuoi ordinare il tuo pasto preferito. Esercitati a ordinare cibo, chiedere informazioni sugli ingredienti e fare richieste speciali.',
+                'difficulty': 'beginner',
+                'category': 'restaurant',
+                'target_language': 'it',
+            },
+            {
+                'title': 'Chiedere Indicazioni',
+                'scenario': 'Ti sei perso in città e devi trovare la stazione dei treni. Esercitati a chiedere indicazioni e capire le risposte.',
+                'difficulty': 'beginner',
+                'category': 'travel',
+                'target_language': 'it',
+            },
+            {
+                'title': 'Saluti Quotidiani',
+                'scenario': 'Pratica i saluti comuni e le presentazioni per diversi momenti della giornata e situazioni.',
+                'difficulty': 'beginner',
+                'category': 'greetings',
+                'target_language': 'it',
+            }
+        ]
 
-        language = current_user.preferences.target_language
-        level = current_user.preferences.skill_level
+        for scenario in scenarios:
+            speaking_exercise = SpeakingExercise(**scenario)
+            db.session.add(speaking_exercise)
 
-        # Create a detailed prompt for OpenAI
-        prompt = f"""
-        As a language learning expert, generate 10 vocabulary words for {language} at {level} level.
-        For each word, provide:
-        1. The word in the target language
-        2. English translation
-        3. An example sentence using the word
-        4. The difficulty level (1=beginner, 2=intermediate, 3=advanced)
-
-        Return the data in JSON format like this:
-        {{
-            "vocabulary": [
-                {{
-                    "word": "word in target language",
-                    "translation": "english translation",
-                    "example_sentence": "example sentence in target language",
-                    "difficulty": difficulty_level,
-                    "category": "category name"
-                }},
-                ...
-            ]
-        }}
-        """
-
-        # Get response from OpenAI
-        logger.debug(f"Sending message to OpenAI: {prompt}")
-        response = chat_with_ai(prompt)
-        logger.debug(f"Received response from OpenAI: {response}")
-        data = json.loads(response)
-
-        # Save new vocabulary items
-        for item in data['vocabulary']:
-            vocab_item = VocabularyItem(
-                word=item['word'],
-                translation=item['translation'],
-                language=language,
-                category=item.get('category', 'general'),
-                difficulty=item['difficulty'],
-                example_sentence=item['example_sentence']
-            )
-            db.session.add(vocab_item)
-
-        db.session.commit()
-
-        # Create or update daily vocabulary set
-        today = datetime.utcnow().date()
-        daily_set = DailyVocabulary.query.filter_by(
-            user_id=current_user.id,
-            date=today
-        ).first()
-
-        if not daily_set:
-            daily_set = DailyVocabulary(user_id=current_user.id, date=today)
-            db.session.add(daily_set)
-
-        # Get newly created vocabulary items
-        new_words = VocabularyItem.query.filter_by(
-            language=language
-        ).order_by(db.func.random()).limit(10).all()
-
-        daily_set.vocabulary_items = new_words
-        db.session.commit()
-
-        return jsonify({'status': 'success', 'message': 'Vocabulary generated successfully'})
-
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error: {str(e)}, Response: {response}")
-        return jsonify({'error': 'Invalid response format from AI'}), 500
-    except Exception as e:
-        logger.error(f"Error generating vocabulary: {str(e)}")
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/translate', methods=['POST'])
-@login_required
-def translate_text():
-    try:
-        data = request.get_json()
-        text = data.get('text')
-        source_lang = data.get('source_lang')
-        target_lang = data.get('target_lang', 'en')  # Default to English
-
-        if not text or not source_lang:
-            return jsonify({'error': 'Missing required parameters'}), 400
-
-        # Create prompt for OpenAI
-        prompt = f"""
-        Translate the following text from {source_lang} to {target_lang}:
-        Text: {text}
-
-        Provide only the direct translation without any additional explanations.
-        If the text is already in the target language, return it unchanged.
-        """
-
-        translation = chat_with_ai(prompt).strip()
-
-        return jsonify({
-            'translation': translation,
-            'source_text': text,
-            'source_lang': source_lang,
-            'target_lang': target_lang
-        })
-
-    except Exception as e:
-        logger.error(f"Translation error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        try:
+            db.session.commit()
+            logger.info("Initialized speaking scenarios")
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error initializing speaking scenarios: {e}")
 
 with app.app_context():
     # Create all database tables
     db.create_all()
     logger.info("Database tables created successfully")
     initialize_vocabulary()
+    initialize_speaking_scenarios()

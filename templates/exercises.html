@@ -2,21 +2,115 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-md-10">
         <div class="card">
             <div class="card-header bg-info text-white">
                 <h2 class="mb-0">Speaking Practice</h2>
             </div>
             <div class="card-body">
-                <div class="progress mb-4">
-                    <div id="progress-bar" class="progress-bar" role="progressbar"></div>
+                <!-- Scenario Selection -->
+                <div class="mb-4">
+                    <h4>Choose a Scenario</h4>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="card scenario-card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Restaurant Ordering</h5>
+                                    <p class="card-text">Practice ordering food and drinks at a restaurant.</p>
+                                    <button class="btn btn-info start-scenario" data-scenario="restaurant">
+                                        Start Practice
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card scenario-card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Travel Conversations</h5>
+                                    <p class="card-text">Practice common travel situations and directions.</p>
+                                    <button class="btn btn-info start-scenario" data-scenario="travel">
+                                        Start Practice
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card scenario-card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Daily Greetings</h5>
+                                    <p class="card-text">Practice everyday conversations and greetings.</p>
+                                    <button class="btn btn-info start-scenario" data-scenario="greetings">
+                                        Start Practice
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div id="exercise-container"></div>
+                <!-- Practice Area -->
+                <div id="practice-area" style="display: none;">
+                    <div class="practice-content">
+                        <div class="scenario-description mb-4">
+                            <h4 id="scenario-title"></h4>
+                            <p id="scenario-description" class="lead"></p>
+                        </div>
 
-                <div class="d-flex justify-content-between mt-4">
-                    <button id="prev-btn" class="btn btn-secondary" onclick="previousExercise()">Previous</button>
-                    <button id="next-btn" class="btn btn-info" onclick="nextExercise()">Next</button>
+                        <!-- Example Audio -->
+                        <div class="example-audio mb-4">
+                            <h5>Listen to Example</h5>
+                            <button class="btn btn-secondary" id="play-example">
+                                <i class="bi bi-volume-up"></i> Play Example
+                            </button>
+                        </div>
+
+                        <!-- Recording Interface -->
+                        <div class="recording-interface mb-4">
+                            <h5>Your Turn</h5>
+                            <div class="d-flex gap-2 mb-3">
+                                <button class="btn btn-danger" id="start-recording">
+                                    <i class="bi bi-record-circle"></i> Start Recording
+                                </button>
+                                <button class="btn btn-secondary" id="stop-recording" disabled>
+                                    <i class="bi bi-stop-circle"></i> Stop Recording
+                                </button>
+                                <button class="btn btn-info" id="play-recording" disabled>
+                                    <i class="bi bi-play-circle"></i> Play Recording
+                                </button>
+                            </div>
+                            <div class="recording-status">
+                                <span id="recording-timer" class="badge bg-danger" style="display: none;">
+                                    Recording: 0:00
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Feedback Area -->
+                        <div id="feedback-area" class="mb-4" style="display: none;">
+                            <h5>Feedback</h5>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="pronunciation-score mb-3">
+                                        <label>Pronunciation Score:</label>
+                                        <div class="progress">
+                                            <div id="pronunciation-progress" class="progress-bar bg-info" 
+                                                 role="progressbar" style="width: 0%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="pronunciation-feedback">
+                                        <!-- Feedback will be inserted here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Navigation Buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <button class="btn btn-secondary" id="prev-exercise">Previous</button>
+                            <button class="btn btn-info" id="next-exercise">Next Exercise</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -25,6 +119,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/speaking-practice.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script src="{{ url_for('static', filename='js/exercises.js') }}"></script>
 {% endblock %}

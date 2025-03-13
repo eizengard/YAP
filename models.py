@@ -13,6 +13,7 @@ class User(UserMixin, db.Model):
     preferences = db.relationship('UserPreferences', backref='user', uselist=False)
     daily_vocabulary = db.relationship('DailyVocabulary', backref='user', lazy=True)
     sentence_practices = db.relationship('SentencePractice', backref='user', lazy=True)
+    speaking_attempts = db.relationship('UserSpeakingAttempt', backref='student', lazy=True)
 
 class UserPreferences(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -83,3 +84,23 @@ class SentencePractice(db.Model):
     feedback = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     vocabulary_item = db.relationship('VocabularyItem')
+
+class SpeakingExercise(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    scenario = db.Column(db.Text, nullable=False)
+    difficulty = db.Column(db.String(20), nullable=False)  # beginner, intermediate, advanced
+    category = db.Column(db.String(50), nullable=False)  # e.g., 'restaurant', 'travel', 'business'
+    target_language = db.Column(db.String(10), nullable=False)
+    example_audio_url = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class UserSpeakingAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    exercise_id = db.Column(db.Integer, db.ForeignKey('speaking_exercise.id'), nullable=False)
+    audio_recording_url = db.Column(db.String(200))
+    pronunciation_score = db.Column(db.Float)  # 0-100 score
+    feedback = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    exercise = db.relationship('SpeakingExercise')
