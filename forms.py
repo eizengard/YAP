@@ -21,7 +21,17 @@ class UserPreferencesForm(FlaskForm):
             ('it', 'Italian'),
             ('fr', 'French'),
             ('de', 'German'),
-            ('pt', 'Portuguese')
+            ('pt', 'Portuguese'),
+            ('ja', 'Japanese'),
+            ('ko', 'Korean'),
+            ('zh', 'Mandarin Chinese'),
+            ('ru', 'Russian'),
+            ('ar', 'Arabic'),
+            ('nl', 'Dutch'),
+            ('pl', 'Polish'),
+            ('tr', 'Turkish'),
+            ('hi', 'Hindi'),
+            ('vi', 'Vietnamese')
         ],
         validators=[DataRequired()]
     )
