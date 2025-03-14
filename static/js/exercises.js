@@ -31,6 +31,13 @@ let answerChecked = false;
 function displayExercise() {
     const exerciseContainer = document.getElementById('exercise-container');
     const progressBar = document.getElementById('progress-bar');
+    
+    // Safety check - if elements don't exist, don't proceed
+    if (!exerciseContainer || !progressBar) {
+        console.log('Exercise container or progress bar elements not found. Skipping exercise display.');
+        return;
+    }
+    
     const exercise = exercises[currentExerciseIndex];
     answerChecked = false;
 
@@ -80,17 +87,24 @@ function selectOption(index) {
 // Function to show feedback message
 function showFeedback(message, isCorrect) {
     const feedbackDiv = document.querySelector('.feedback-message');
+    if (!feedbackDiv) {
+        console.log('Feedback div not found');
+        return;
+    }
+    
     feedbackDiv.className = `feedback-message alert ${isCorrect ? 'alert-success' : 'alert-danger'} mb-3`;
     feedbackDiv.style.display = 'block';
     feedbackDiv.textContent = message;
 
     if (isCorrect) {
         // Trigger confetti
-        confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 }
-        });
+        if (typeof confetti === 'function') {
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        }
     }
 }
 
@@ -143,6 +157,11 @@ function showResults() {
     const exerciseContainer = document.getElementById('exercise-container');
     const progressBar = document.getElementById('progress-bar');
 
+    if (!exerciseContainer || !progressBar) {
+        console.log('Exercise container or progress bar elements not found.');
+        return;
+    }
+
     progressBar.style.width = '100%';
     progressBar.setAttribute('aria-valuenow', 100);
 
@@ -156,7 +175,7 @@ function showResults() {
         </div>
     `;
 
-    if (percentage >= 80) {
+    if (percentage >= 80 && typeof confetti === 'function') {
         confetti({
             particleCount: 200,
             spread: 90,
@@ -197,5 +216,11 @@ async function saveProgress() {
 
 // Initialize exercises when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    displayExercise();
+    // Check if we're on a page that uses the vocabulary exercises
+    const exerciseContainer = document.getElementById('exercise-container');
+    const progressBar = document.getElementById('progress-bar');
+    
+    if (exerciseContainer && progressBar) {
+        displayExercise();
+    }
 });

@@ -4,6 +4,7 @@ import random
 import json
 import tempfile
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
@@ -11,10 +12,18 @@ from flask_login import LoginManager, current_user, login_user, logout_user, log
 from gtts import gTTS
 import tempfile
 from sqlalchemy import func
+import openai
+from flask_wtf.csrf import CSRFProtect
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Debug database URL
+logger.debug(f"DATABASE_URL: {os.environ.get('DATABASE_URL')}")
 
 class Base(DeclarativeBase):
     pass
@@ -26,11 +35,31 @@ db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET")
 
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
+
 # Configure database
 database_url = os.environ.get("DATABASE_URL")
 if not database_url:
     raise RuntimeError("DATABASE_URL environment variable is not set")
 
+# Ensure instance directory exists for SQLite
+if database_url.startswith('sqlite:///'):
+    db_path = database_url.replace('sqlite:///', '')
+    if db_path.startswith('/'):
+        # Absolute path
+        db_dir = os.path.dirname(db_path)
+    else:
+        # Relative path
+        db_dir = os.path.dirname(os.path.join(app.root_path, db_path))
+    
+    os.makedirs(db_dir, exist_ok=True)
+    logger.debug(f"Ensured database directory exists: {db_dir}")
+
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    raise RuntimeError("DATABASE_URL environment variable is not set")
+print("Using DATABASE_URL from environment:", database_url)  # Debugging output
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
@@ -50,11 +79,36 @@ from utils.openai_helper import chat_with_ai, transcribe_audio
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    # Force a fresh database query by setting options(lazyload=True)
+    # This ensures that relationships like preferences are always fetched fresh
+    user = User.query.get(int(user_id))
+    if user:
+        # Explicitly load preferences to ensure we have the latest data
+        if hasattr(user, 'preferences'):
+            # Clear existing preference reference if any
+            if user.preferences is not None:
+                db.session.expunge(user.preferences)
+            
+            # Get fresh preferences
+            fresh_prefs = UserPreferences.query.filter_by(user_id=user.id).first()
+            if fresh_prefs:
+                # Make sure preferences are attached to the user object
+                user.preferences = fresh_prefs
+                logger.debug(f"Loaded fresh preferences for user {user.id}: {fresh_prefs.target_language}")
+    
+    return user
 
 @app.route('/')
 def index():
     if current_user.is_authenticated:
+        # Always refresh the current user to get the latest preferences
+        user = User.query.get(current_user.id)
+        if user and user.preferences:
+            # Force refresh current_user.preferences
+            fresh_preferences = UserPreferences.query.filter_by(user_id=user.id).first()
+            if fresh_preferences:
+                logger.debug(f"Fresh preferences loaded: {fresh_preferences.target_language}")
+        
         # Get today's vocabulary set if user is logged in
         today = datetime.utcnow().date()
         daily_set = DailyVocabulary.query.filter_by(
@@ -156,11 +210,14 @@ def handle_chat():
         logger.debug(f"Processing chat message: {user_message}")
         response = chat_with_ai(user_message)
 
+        # Extract the content from the response dictionary
+        response_content = response['content'] if isinstance(response, dict) else str(response)
+        
         # Save the chat message and response
         chat = Chat(
             user_id=current_user.id,
             message=user_message,
-            response=response,
+            response=response_content,  # Store only the string content
             timestamp=datetime.utcnow()
         )
         db.session.add(chat)
@@ -194,45 +251,159 @@ def get_chat_history():
         return jsonify({'error': 'Failed to fetch chat history'}), 500
 
 @app.route('/api/text-to-speech', methods=['POST'])
-@login_required
 def text_to_speech():
     try:
-        text = request.json.get('text')
-        lang = request.json.get('lang', 'en')  # Default to English
-        accent = request.json.get('accent', 'com')  # Default to US accent
-
-        if not text:
+        data = request.get_json()
+        text = data.get('text')
+        lang = data.get('language', 'es')  # Default to Spanish
+        voice = data.get('voice')  # Allow client to specify voice if desired
+        
+        if not text or not text.strip():
             return jsonify({'error': 'No text provided'}), 400
 
-        # Configure TTS with enhanced parameters
-        tts = gTTS(
-            text=text,
-            lang=lang,  # Use requested language
-            lang_check=True,  # Enable language checking
-            slow=False,  # Normal speed
-            tld=accent  # Use requested accent (com=US, co.uk=British, ca=Canadian, etc.)
-        )
+        # Normalize and improve text quality for TTS
+        text = text.strip()
+        if text and not text[-1] in '.!?':
+            text = text + '.'
+        
+        # Try to detect the language from the text if not specified or mismatched
+        # Basic language detection heuristics for common words/characters
+        detected_lang = lang
+        if not lang or lang == 'es':
+            # Check for Italian words/phrases
+            italian_markers = ['è', 'sono', 'mia', 'casa', 'molto', 'ciao', 'grazie', 'piacere', 'come stai']
+            if any(marker in text.lower() for marker in italian_markers) and 'è' in text:
+                detected_lang = 'it'
+                logger.debug(f"Language detected as Italian instead of {lang}")
+            
+            # Check for French words/phrases
+            french_markers = ['je suis', 'bonjour', 'merci', 'je', 'tu', 'nous', 'vous', 'très', 'beaucoup']
+            if any(marker in text.lower() for marker in french_markers):
+                detected_lang = 'fr'
+                logger.debug(f"Language detected as French instead of {lang}")
+            
+            # Check for German words/phrases
+            german_markers = ['ich', 'bin', 'du', 'ist', 'hallo', 'guten', 'danke', 'bitte', 'haus']
+            if any(marker in text.lower() for marker in german_markers):
+                detected_lang = 'de'
+                logger.debug(f"Language detected as German instead of {lang}")
+        
+        logger.debug(f"TTS request - Text: {text[:30]}..., Language: {lang}, Detected: {detected_lang}, Voice: {voice}")
 
+        # Map languages to appropriate OpenAI voices based on quality testing
+        language_voice_map = {
+            'es': 'nova',      # Spanish - nova has excellent Spanish pronunciation
+            'it': 'alloy',     # Italian - alloy has better Italian articulation
+            'fr': 'echo',      # French - echo handles French sounds well
+            'de': 'fable',     # German - fable works for German
+            'en': 'onyx',      # English - onyx is a warm English voice
+            'pt': 'nova',      # Portuguese - similar enough to Spanish
+            'ru': 'shimmer',   # Russian
+            'zh': 'nova',      # Mandarin Chinese
+            'ja': 'shimmer',   # Japanese
+            'ko': 'shimmer',   # Korean
+            'ar': 'nova',      # Arabic
+            'nl': 'fable',     # Dutch
+            'pl': 'fable',     # Polish
+            'tr': 'alloy',     # Turkish
+            'hi': 'nova',      # Hindi
+            'vi': 'shimmer'    # Vietnamese
+        }
+        
+        # Use provided voice or select based on detected language
+        if not voice:
+            voice = language_voice_map.get(detected_lang, 'alloy')  # Default to alloy if language not found
+            
+        logger.debug(f"Selected voice '{voice}' for language '{detected_lang}'")
+        
         # Create temporary file with unique name
         audio_filename = f'tts_{datetime.utcnow().timestamp()}.mp3'
-        audio_path = os.path.join('static', 'audio', audio_filename)
+        audio_path = os.path.join('static', 'audio', 'tts', audio_filename)
 
         # Ensure audio directory exists
-        os.makedirs(os.path.join('static', 'audio'), exist_ok=True)
+        os.makedirs(os.path.join('static', 'audio', 'tts'), exist_ok=True)
+        
+        # Check if OpenAI API key is available
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        # Clean up key if it has line breaks or whitespace
+        if openai_api_key:
+            openai_api_key = openai_api_key.strip().replace('\n', '')
+        logger.debug(f"OpenAI API key available: {bool(openai_api_key)}")
+        
+        if not openai_api_key:
+            # Fall back to gTTS if no OpenAI API key is available
+            logger.warning("No OpenAI API key available, falling back to gTTS")
+            try:
+                tts = gTTS(text=text, lang=detected_lang, lang_check=False)  # Disable strict language check
+                tts.save(audio_path)
+            except Exception as gtts_error:
+                logger.error(f"gTTS error: {str(gtts_error)}")
+                # Try with Spanish as a fallback
+                try:
+                    fallback_lang = 'es'
+                    logger.info(f"Trying fallback language {fallback_lang}")
+                    tts = gTTS(text=text, lang=fallback_lang, lang_check=False)
+                    tts.save(audio_path)
+                except Exception as fallback_error:
+                    logger.error(f"Fallback gTTS error: {str(fallback_error)}")
+                    return jsonify({'error': f'Failed to generate audio: {str(gtts_error)}'}), 500
+        else:
+            # Use OpenAI's TTS
+            try:
+                client = openai.OpenAI(api_key=openai_api_key)
+                
+                # Determine which model to use
+                # For short phrases use standard model (faster)
+                # For complex content, longer texts, use HD model (better quality)
+                model_to_use = "tts-1"
+                if len(text) > 50 or any(lang in ('zh', 'ja', 'ko', 'ru', 'ar') for lang in [detected_lang]):
+                    model_to_use = "tts-1-hd"  # Use HD for complex languages or longer texts
+                
+                speech_file_response = client.audio.speech.create(
+                    model=model_to_use,
+                    voice=voice,
+                    input=text,
+                    speed=0.85  # Slightly slower for better comprehension
+                )
+                
+                # Save the file
+                with open(audio_path, "wb") as file:
+                    for chunk in speech_file_response.iter_bytes(chunk_size=1024):
+                        file.write(chunk)
+                
+                logger.debug(f"OpenAI TTS audio saved to: {audio_path}")
+            except Exception as openai_error:
+                logger.error(f"OpenAI TTS error: {str(openai_error)}")
+                
+                # Fallback to gTTS if OpenAI fails
+                logger.info(f"Falling back to gTTS after OpenAI error")
+                try:
+                    tts = gTTS(text=text, lang=detected_lang, lang_check=False)
+                    tts.save(audio_path)
+                    logger.debug(f"Fallback gTTS audio saved to: {audio_path}")
+                except Exception as gtts_error:
+                    logger.error(f"gTTS fallback error: {str(gtts_error)}")
+                    return jsonify({'error': f'Both TTS methods failed: {str(openai_error)}, then {str(gtts_error)}'}), 500
 
-        # Save the audio file
-        tts.save(audio_path)
+        # Verify file was created and has content
+        if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+            logger.error(f"Audio file not created or empty: {audio_path}")
+            return jsonify({'error': 'Failed to create audio file'}), 500
+            
+        logger.debug(f"Audio file created successfully: {audio_path}, size: {os.path.getsize(audio_path)} bytes")
 
         # Return the URL path to the audio file
-        audio_url = url_for('static', filename=f'audio/{audio_filename}')
+        audio_url = url_for('static', filename=f'audio/tts/{audio_filename}')
         return jsonify({
             'audio_url': audio_url,
-            'lang': lang,
-            'accent': accent
+            'text': text,
+            'language': detected_lang,
+            'voice': voice
         })
+
     except Exception as e:
-        logger.error(f"TTS error: {str(e)}")
-        return jsonify({'error': 'Text-to-speech conversion failed'}), 500
+        logger.error(f"Error in text_to_speech route: {str(e)}")
+        return jsonify({'error': f'Failed to generate audio: {str(e)}'}), 500
 
 @app.route('/api/save-progress', methods=['POST'])
 @login_required
@@ -374,7 +545,7 @@ def save_vocabulary_progress():
 def preferences():
     # Check if user already has preferences
     if current_user.preferences and not request.args.get('edit'):
-        return redirect(url_for('index'))
+        return redirect(url_for('profile'))  # Changed to go to profile instead of index
 
     form = UserPreferencesForm()
     if form.validate_on_submit():
@@ -390,18 +561,44 @@ def preferences():
                 logger.debug("Updating existing preferences")
 
             # Update the preferences fields
-            preferences.target_language = form.target_language.data
+            original_language = preferences.target_language if preferences.target_language else "none"
+            new_language = form.target_language.data
+            preferences.target_language = new_language
             preferences.skill_level = form.skill_level.data
             preferences.practice_duration = form.practice_duration.data
             preferences.learning_goal = form.learning_goal.data
             preferences.updated_at = datetime.utcnow()
 
-            logger.debug(f"About to commit preferences: {preferences.target_language}, {preferences.skill_level}")
+            logger.debug(f"About to commit preferences change from {original_language} to {new_language}")
             db.session.commit()
             logger.debug("Preferences saved successfully")
-
+            
+            # Store the user ID to reload after logout
+            user_id = current_user.id
+            
+            # More aggressive session refresh
+            from flask import session
+            
+            # Clear any existing Flask session data
+            session.clear()
+            
+            # Log out the current user
+            logout_user()
+            
+            # Reload the user from the database to get fresh data
+            user = User.query.get(user_id)
+            
+            # Log the user back in
+            login_user(user)
+            
+            # Force an explicit load of preferences to avoid caching issues
+            fresh_prefs = UserPreferences.query.filter_by(user_id=user.id).first()
+            logger.debug(f"User session completely refreshed with new preferences: {fresh_prefs.target_language}")
+            
+            # Include a cache-busting parameter in the redirect
+            timestamp = int(datetime.utcnow().timestamp())
             flash('Your preferences have been saved!', 'success')
-            return redirect(url_for('profile'))
+            return redirect(url_for('profile', _t=timestamp))  # Redirect to profile page with cache busting
         except Exception as e:
             db.session.rollback()
             logger.error(f"Error saving preferences: {str(e)}")
@@ -425,6 +622,16 @@ def daily_practice():
     if not current_user.preferences:
         flash('Please set your language preferences first.', 'warning')
         return redirect(url_for('preferences'))
+        
+    # Always refresh user preferences from database to get the latest language
+    fresh_preferences = UserPreferences.query.filter_by(user_id=current_user.id).first()
+    if fresh_preferences:
+        # Log current language for debugging
+        logger.debug(f"Daily practice loaded with language: {fresh_preferences.target_language}")
+    else:
+        logger.warning(f"No preferences found for user {current_user.id}")
+        flash('Please set your language preferences first.', 'warning')
+        return redirect(url_for('preferences'))
 
     # Get or create today's vocabulary set
     today = datetime.utcnow().date()
@@ -433,12 +640,27 @@ def daily_practice():
         date=today
     ).first()
 
-    if not daily_set:
+    # Check if there's a language mismatch before proceeding
+    language_mismatch = False
+    if daily_set and daily_set.vocabulary_items:
+        item_languages = set(item.language for item in daily_set.vocabulary_items)
+        if len(item_languages) > 1 or fresh_preferences.target_language not in item_languages:
+            language_mismatch = True
+            logger.debug(f"Language mismatch: vocabulary items are in {item_languages}, but user preference is {fresh_preferences.target_language}")
+            
+            # Clear the existing vocabulary items to force new ones for the current language
+            daily_set.vocabulary_items = []
+            db.session.commit()
+            flash('Your language preference has changed. New vocabulary will be generated.', 'info')
+
+    if not daily_set or not daily_set.vocabulary_items:
         # Create new daily set based on user's level
-        daily_set = DailyVocabulary(user_id=current_user.id, date=today)
+        if not daily_set:
+            daily_set = DailyVocabulary(user_id=current_user.id, date=today)
+            db.session.add(daily_set)
 
         # Get user's skill level
-        user_level = current_user.preferences.skill_level
+        user_level = fresh_preferences.skill_level
         difficulty_map = {
             'beginner': 1,
             'intermediate': 2,
@@ -448,17 +670,17 @@ def daily_practice():
 
         # Get vocabulary items matching user's level and language
         words = VocabularyItem.query.filter_by(
-            language=current_user.preferences.target_language,
+            language=fresh_preferences.target_language,
             difficulty=difficulty
         ).order_by(db.func.random()).limit(10).all()
 
         if not words:
-            flash('No vocabulary items available for your language and level.', 'warning')
-            return redirect(url_for('index'))
+            flash('No vocabulary items available for your language and level. Please generate some new words.', 'warning')
+            return render_template('daily_practice.html', daily_set=None, completed_sentences={}, language_mismatch=False)
 
         daily_set.vocabulary_items.extend(words)
-        db.session.add(daily_set)
         db.session.commit()
+        logger.debug(f"Created daily set with {len(words)} words in language {fresh_preferences.target_language}")
 
     # Get completed sentences for today
     completed_sentences = {}
@@ -476,7 +698,8 @@ def daily_practice():
 
     return render_template('daily_practice.html',
                          daily_set=daily_set,
-                         completed_sentences=completed_sentences)
+                         completed_sentences=completed_sentences,
+                         language_mismatch=language_mismatch)
 
 @app.route('/submit-sentence', methods=['POST'])
 @login_required
@@ -756,7 +979,7 @@ def get_speaking_scenario(scenario_id):
                 hints = [
                     "Muy bien, gracias. / Estoy... / Todo bien...",
                     "Fui a... / Estuve en... / Me quedé en casa...",
-                    "Sí, me encantaría. / ¿Qué le parece el...?",
+                    "Sí, me encantaría. / Che ne dice...?",
                     "¡Igualmente! / ¡Hasta pronto! / ¡Nos vemos!"
                 ]
         elif scenario.target_language == 'it':  # Italian prompts
@@ -819,26 +1042,41 @@ def get_speaking_scenario(scenario_id):
 def submit_speaking_practice():
     try:
         if 'audio' not in request.files:
+            logger.error("No audio file in request.files")
             return jsonify({'error': 'No audio file provided'}), 400
 
         audio_file = request.files['audio']
+        logger.debug(f"Received audio file: {audio_file.filename}, mimetype: {audio_file.mimetype}")
+        
         scenario_id = request.form.get('scenario_id')
         prompt_index = request.form.get('prompt_index', 0)
 
         if not scenario_id:
+            logger.error("No scenario_id provided")
             return jsonify({'error': 'No scenario ID provided'}), 400
 
         # Save the audio file temporarily
         temp_audio_path = os.path.join(tempfile.gettempdir(), f'speaking_{datetime.utcnow().timestamp()}.webm')
+        logger.debug(f"Saving audio to temporary file: {temp_audio_path}")
         audio_file.save(temp_audio_path)
-
+        
+        # Log file size and existence
+        file_size = os.path.getsize(temp_audio_path) if os.path.exists(temp_audio_path) else "File does not exist"
+        logger.debug(f"Temporary audio file size: {file_size} bytes")
+        
         # Transcribe the audio using OpenAI's Whisper
-        transcription = transcribe_audio(temp_audio_path)
-        logger.debug(f"Transcription result: {transcription}")
+        logger.debug(f"About to transcribe audio from path: {temp_audio_path}")
+        try:
+            transcription = transcribe_audio(temp_audio_path)
+            logger.debug(f"Transcription result: {transcription}")
+        except Exception as e:
+            logger.error(f"Transcription error: {str(e)}")
+            return jsonify({'error': f'Failed to transcribe audio: {str(e)}'}), 500
 
         # Get the scenario for comparison
         scenario = SpeakingExercise.query.get(scenario_id)
         if not scenario:
+            logger.error(f"Scenario not found with ID: {scenario_id}")
             return jsonify({'error': 'Scenario not found'}), 404
 
         # Create prompt for pronunciation feedback
@@ -900,37 +1138,203 @@ def generate_example_audio():
         text = data.get('text')
         lang = data.get('language', 'es')  # Default to Spanish
 
-        if not text:
+        if not text or not text.strip():
             return jsonify({'error': 'No text provided'}), 400
+            
+        # Ensure text ends with proper punctuation for better TTS quality
+        text = text.strip()
+        if text and not text[-1] in '.!?':
+            text = text + '.'
+        
+        # Try to detect the language from the text if not specified or mismatched
+        # Basic language detection heuristics for common words/characters
+        detected_lang = lang
+        if not lang or lang == 'es':
+            # Check for Italian words/phrases
+            italian_markers = ['è', 'sono', 'mia', 'casa', 'molto', 'ciao', 'grazie', 'piacere', 'come stai']
+            if any(marker in text.lower() for marker in italian_markers) and 'è' in text:
+                detected_lang = 'it'
+                logger.debug(f"Language detected as Italian instead of {lang}")
+            
+            # Check for French words/phrases
+            french_markers = ['je suis', 'bonjour', 'merci', 'je', 'tu', 'nous', 'vous', 'très', 'beaucoup']
+            if any(marker in text.lower() for marker in french_markers):
+                detected_lang = 'fr'
+                logger.debug(f"Language detected as French instead of {lang}")
+            
+            # Check for German words/phrases
+            german_markers = ['ich', 'bin', 'du', 'ist', 'hallo', 'guten', 'danke', 'bitte', 'haus']
+            if any(marker in text.lower() for marker in german_markers):
+                detected_lang = 'de'
+                logger.debug(f"Language detected as German instead of {lang}")
+            
+        logger.debug(f"Example audio request - Text: {text[:30]}..., Language: {lang}, Detected: {detected_lang}")
 
-        #        # Configure TTS
-        tts = gTTS(text=text, lang=lang, lang_check=True)
-
-        # Create# Create temporary file with unique name
+        # Map languages to appropriate OpenAI voices based on quality testing
+        language_voice_map = {
+            'es': 'nova',      # Spanish - nova has excellent Spanish pronunciation
+            'it': 'alloy',     # Italian - alloy has better Italian articulation
+            'fr': 'echo',      # French - echo handles French sounds well
+            'de': 'fable',     # German - fable works for German
+            'en': 'onyx',      # English - onyx is a warm English voice
+            'pt': 'nova',      # Portuguese - similar enough to Spanish
+            'ru': 'shimmer',   # Russian
+            'zh': 'nova',      # Mandarin Chinese - nova has decent pronunciation
+            'ja': 'shimmer',   # Japanese
+            'ko': 'shimmer',   # Korean
+            'ar': 'nova',      # Arabic
+            'nl': 'fable',     # Dutch
+            'pl': 'fable',     # Polish
+            'tr': 'alloy',     # Turkish
+            'hi': 'nova',      # Hindi
+            'vi': 'shimmer'    # Vietnamese
+        }
+        
+        voice = language_voice_map.get(detected_lang, 'alloy')  # Default to alloy if language not found
+        logger.debug(f"Selected voice '{voice}' for language '{detected_lang}'")
+        
+        # Create temporary file with unique name
         audio_filename = f'example_{datetime.utcnow().timestamp()}.mp3'
-        audio_path = os.path.join('static', 'audio','examples', audio_filename)
+        audio_path = os.path.join('static', 'audio', 'examples', audio_filename)
 
         # Ensure audio directory exists
         os.makedirs(os.path.join('static', 'audio', 'examples'), exist_ok=True)
+        
+        # Check if OpenAI API key is available
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        # Clean up key if it has line breaks or whitespace
+        if openai_api_key:
+            openai_api_key = openai_api_key.strip().replace('\n', '')
+        logger.debug(f"OpenAI API key available: {bool(openai_api_key)}")
+        
+        if not openai_api_key:
+            # Fall back to gTTS if no OpenAI API key is available
+            logger.warning("No OpenAI API key available, falling back to gTTS")
+            try:
+                tts = gTTS(text=text, lang=detected_lang, lang_check=False)  # Disable strict language check
+                tts.save(audio_path)
+            except Exception as gtts_error:
+                logger.error(f"gTTS error: {str(gtts_error)}")
+                # Try with Spanish as a fallback
+                try:
+                    fallback_lang = 'es'
+                    logger.info(f"Trying fallback language {fallback_lang}")
+                    tts = gTTS(text=text, lang=fallback_lang, lang_check=False)
+                    tts.save(audio_path)
+                except Exception as fallback_error:
+                    logger.error(f"Fallback gTTS error: {str(fallback_error)}")
+                    return jsonify({'error': f'Failed to generate example audio: {str(gtts_error)}'}), 500
+        else:
+            # Use OpenAI's TTS
+            try:
+                client = openai.OpenAI(api_key=openai_api_key)
+                
+                # For complex phonetic languages, always use HD model
+                model_to_use = "tts-1-hd"  # Always use high definition for examples
+                
+                speech_file_response = client.audio.speech.create(
+                    model=model_to_use,
+                    voice=voice,
+                    input=text,
+                    speed=0.75  # Slightly slower for better comprehension and learning
+                )
+                
+                # Save the file
+                with open(audio_path, "wb") as file:
+                    for chunk in speech_file_response.iter_bytes(chunk_size=1024):
+                        file.write(chunk)
+                
+                logger.debug(f"OpenAI TTS audio saved to: {audio_path}")
+            except Exception as openai_error:
+                logger.error(f"OpenAI TTS error: {str(openai_error)}")
+                
+                # Fallback to gTTS if OpenAI fails
+                logger.info(f"Falling back to gTTS after OpenAI error")
+                try:
+                    # For fallback, don't enforce strict language checking
+                    tts = gTTS(text=text, lang=detected_lang, lang_check=False)
+                    tts.save(audio_path)
+                    logger.debug(f"Fallback gTTS audio saved to: {audio_path}")
+                except Exception as gtts_error:
+                    logger.error(f"gTTS fallback error: {str(gtts_error)}")
+                    return jsonify({'error': f'Both TTS methods failed: {str(openai_error)}, then {str(gtts_error)}'}), 500
 
-        # Save the audio file
-        tts.save(audio_path)
+        # Verify file was created and has content
+        if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+            logger.error(f"Audio file not created or empty: {audio_path}")
+            return jsonify({'error': 'Failed to create audio file'}), 500
+            
+        logger.debug(f"Audio file created successfully: {audio_path}, size: {os.path.getsize(audio_path)} bytes")
 
         # Return the URL path to the audio file
         audio_url = url_for('static', filename=f'audio/examples/{audio_filename}')
         return jsonify({
             'audio_url': audio_url,
             'text': text,
-            'language': lang
+            'language': detected_lang,
+            'voice': voice
         })
 
     except Exception as e:
         logger.error(f"Error generating example audio: {str(e)}")
-        return jsonify({'error': 'Failed to generate example audio'}), 500
+        return jsonify({'error': f'Failed to generate example audio: {str(e)}'}), 500
+
+@app.route('/api/translate', methods=['POST'])
+@login_required
+def translate_text():
+    try:
+        data = request.json
+        text = data.get('text')
+        source_lang = data.get('source_lang', 'auto')
+        target_lang = data.get('target_lang', 'en')
+        
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+            
+        # Create translation prompt
+        prompt = f"""
+        Translate the following text from {source_lang} to {target_lang}:
+        
+        {text}
+        
+        Only provide the translation, without any explanations or additional text.
+        """
+        
+        # Use OpenAI's API for translation
+        response = chat_with_ai(prompt)
+        
+        # Extract the text from the response
+        translated_text = response
+        if isinstance(response, dict) and 'content' in response:
+            translated_text = response['content']
+        
+        # Trim whitespace and remove quotes if present
+        translated_text = translated_text.strip()
+        if translated_text.startswith('"') and translated_text.endswith('"'):
+            translated_text = translated_text[1:-1]
+        
+        return jsonify({
+            'original_text': text,
+            'translated_text': translated_text,
+            'source_lang': source_lang,
+            'target_lang': target_lang
+        })
+        
+    except Exception as e:
+        logger.error(f"Translation error: {str(e)}")
+        return jsonify({'error': f'Translation failed: {str(e)}'}), 500
 
 @app.route('/profile')
 @login_required
 def profile():
+    # Always refresh the current user to get the latest preferences
+    current_user_id = current_user.id
+    fresh_user = User.query.get(current_user_id)
+    fresh_preferences = UserPreferences.query.filter_by(user_id=current_user_id).first()
+    
+    if fresh_preferences:
+        logger.debug(f"Profile page displaying preferences with language: {fresh_preferences.target_language}")
+    
     # Get vocabulary statistics
     vocab_stats = {
         'total_words': VocabularyProgress.query.filter_by(user_id=current_user.id).count(),
@@ -984,12 +1388,14 @@ def profile():
     # Sort activities by timestamp
     recent_activities.sort(key=lambda x: x['timestamp'], reverse=True)
     recent_activities = recent_activities[:5]  # Keep only the 5 most recent activities
-
+    
+    # Pass fresh user data directly to the template
     return render_template('profile.html',
                          vocab_stats=vocab_stats,
                          speaking_stats=speaking_stats,
                          chat_stats=chat_stats,
-                         recent_activities=recent_activities)
+                         recent_activities=recent_activities,
+                         fresh_preferences=fresh_preferences)
 
 @app.template_filter('datetime')
 def format_datetime(value):
@@ -1013,6 +1419,215 @@ def format_datetime(value):
         return f'{days} day{"s" if days != 1 else ""} ago'
     else:
         return value.strftime('%B %d, %Y')
+
+@app.route('/update-language', methods=['POST'])
+@login_required
+def update_language():
+    try:
+        # Get the new target language from the form
+        new_language = request.form.get('target_language')
+        
+        if not new_language:
+            flash('No language selected.', 'error')
+            return redirect(url_for('profile'))
+            
+        # Get user preferences
+        preferences = UserPreferences.query.filter_by(user_id=current_user.id).first()
+        
+        if not preferences:
+            flash('Please set your full preferences first.', 'warning')
+            return redirect(url_for('preferences'))
+            
+        # Log the language change
+        original_language = preferences.target_language
+        logger.debug(f"Quick language update: {original_language} → {new_language}")
+        
+        # Update the language
+        preferences.target_language = new_language
+        preferences.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        # Just refresh database data without touching the session
+        db.session.expire_all()
+        
+        # Save the updated language info in a flash message
+        flash(f'Language preference updated to {new_language}!', 'success')
+        logger.debug(f"User preferences updated to {new_language}")
+        
+        # Include a cache-busting parameter in the redirect
+        timestamp = int(datetime.utcnow().timestamp())
+        return redirect(url_for('profile', _t=timestamp))
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating language preference: {str(e)}")
+        flash('An error occurred while updating your language preference.', 'error')
+        return redirect(url_for('profile'))
+
+@app.route('/api/generate-vocabulary', methods=['POST'])
+@login_required
+def generate_vocabulary():
+    """Generate new vocabulary words using OpenAI and add them to the user's daily set."""
+    try:
+        if not current_user.preferences:
+            return jsonify({'error': 'Please set your language preferences first.'}), 400
+            
+        target_language = current_user.preferences.target_language
+        skill_level = current_user.preferences.skill_level
+        
+        # Map skill level to difficulty
+        difficulty_map = {
+            'beginner': 1,
+            'intermediate': 2,
+            'advanced': 3
+        }
+        difficulty = difficulty_map.get(skill_level, 1)
+        
+        logger.debug(f"Generating vocabulary for language: {target_language}, level: {skill_level}")
+        
+        # Map language codes to full names for the prompt
+        language_names = {
+            'es': 'Spanish',
+            'fr': 'French',
+            'de': 'German',
+            'it': 'Italian',
+            'pt': 'Portuguese',
+            'ru': 'Russian',
+            'zh': 'Mandarin Chinese',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'ar': 'Arabic'
+        }
+        
+        language_name = language_names.get(target_language, target_language)
+        
+        # Use OpenAI to generate new vocabulary words
+        prompt = f"""
+        Generate 10 vocabulary words for a {skill_level} {language_name} language learner.
+        For each word, provide:
+        1. The word in {language_name}
+        2. The English translation
+        3. A simple example sentence using the word
+        4. The category (e.g., 'food', 'travel', 'daily life', etc.)
+        
+        Return the results in this JSON format:
+        [
+            {{
+                "word": "word in {language_name}",
+                "translation": "English translation",
+                "example_sentence": "Example sentence in {language_name}",
+                "category": "category"
+            }},
+            ...
+        ]
+        """
+        
+        # Get API key - first check if we have one
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            logger.error("OpenAI API key not available")
+            return jsonify({'error': 'OpenAI API key not configured'}), 500
+        
+        # Clean up the API key if it contains newlines or extra whitespace
+        openai_api_key = openai_api_key.strip().replace('\n', '')
+        logger.debug(f"OpenAI API key available (length: {len(openai_api_key)})")
+            
+        try:
+            # Use the OpenAI client to generate vocabulary
+            client = openai.OpenAI(api_key=openai_api_key)
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a helpful language learning assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                response_format={"type": "json_object"}
+            )
+            
+            # Parse the response
+            content = response.choices[0].message.content
+            logger.debug(f"Received OpenAI response with content length: {len(content)}")
+            
+            # Try to parse the JSON with error handling
+            try:
+                vocabulary_items = json.loads(content)
+                logger.debug(f"Successfully parsed JSON response of type: {type(vocabulary_items)}")
+                
+                # If we got a JSON object with a words array or other wrapper
+                if isinstance(vocabulary_items, dict):
+                    if 'words' in vocabulary_items:
+                        vocabulary_items = vocabulary_items['words']
+                    elif 'vocabulary' in vocabulary_items:
+                        vocabulary_items = vocabulary_items['vocabulary']
+                    elif 'items' in vocabulary_items:
+                        vocabulary_items = vocabulary_items['items']
+                    # If it's a dict but doesn't have expected keys, try converting values to a list
+                    elif not isinstance(vocabulary_items, list):
+                        vocabulary_items = list(vocabulary_items.values())
+                
+                # Ensure vocabulary_items is a list
+                if not isinstance(vocabulary_items, list):
+                    logger.error(f"Unexpected response format: {content[:200]}...")
+                    return jsonify({'error': 'Failed to generate vocabulary: unexpected format'}), 500
+                
+                logger.debug(f"Final vocabulary items list has {len(vocabulary_items)} items")
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {str(e)}")
+                logger.error(f"Raw content: {content[:200]}...")
+                return jsonify({'error': 'Failed to parse vocabulary data'}), 500
+            
+            # Create or update the daily vocabulary set
+            today = datetime.utcnow().date()
+            
+            # Delete any existing daily set for today
+            daily_set = DailyVocabulary.query.filter_by(
+                user_id=current_user.id,
+                date=today
+            ).first()
+            
+            if daily_set:
+                # Clear existing vocabulary
+                daily_set.vocabulary_items = []
+            else:
+                # Create new daily set
+                daily_set = DailyVocabulary(user_id=current_user.id, date=today)
+                db.session.add(daily_set)
+            
+            # Add new words to database
+            for item in vocabulary_items:
+                try:
+                    # Create new vocabulary item
+                    vocab_item = VocabularyItem(
+                        word=item['word'],
+                        translation=item['translation'],
+                        language=target_language,
+                        category=item.get('category', 'general'),  # Default to 'general' if category is missing
+                        difficulty=difficulty,
+                        example_sentence=item.get('example_sentence', '')  # Default to empty string if example is missing
+                    )
+                    db.session.add(vocab_item)
+                    
+                    # Add to daily set
+                    daily_set.vocabulary_items.append(vocab_item)
+                except KeyError as e:
+                    logger.error(f"Missing required key in item: {str(e)}")
+                    # Continue with other items even if one has an error
+                    continue
+            
+            db.session.commit()
+            logger.info(f"Generated {len(vocabulary_items)} new vocabulary items")
+            
+            return jsonify({'success': True, 'count': len(vocabulary_items)})
+            
+        except Exception as openai_error:
+            logger.error(f"OpenAI API error: {str(openai_error)}")
+            return jsonify({'error': f'Failed to generate vocabulary: {str(openai_error)}'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error generating vocabulary: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': f'Failed to generate vocabulary: {str(e)}'}), 500
 
 with app.app_context():
     # Create all database tables

@@ -46,10 +46,14 @@ class TranslationManager {
 
     async getTranslation(text, sourceLang, targetLang) {
         try {
+            // Get CSRF token from meta tag
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            
             const response = await fetch('/api/translate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken || ''
                 },
                 body: JSON.stringify({
                     text,
@@ -80,6 +84,3 @@ class TranslationManager {
 document.addEventListener('DOMContentLoaded', () => {
     window.translationManager = new TranslationManager();
 });
-
-// Export for module usage
-export default TranslationManager;

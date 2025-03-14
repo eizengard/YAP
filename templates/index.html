@@ -99,27 +99,39 @@ async function playAudio(button, text, lang) {
         const originalHTML = button.innerHTML;
         button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
 
-        // Detect if the text contains mostly Spanish or Italian words
-        const hasSpanish = /[áéíóúñ¿¡]/i.test(text) || /hola|gracias|por favor/i.test(text);
-        const hasItalian = /[àèéìíòóùú]/i.test(text) || /ciao|grazie|prego/i.test(text);
-
-        // Choose language and accent based on content
-        let accent = 'com'; // Default to US English
-        if (hasSpanish) {
-            accent = 'es'; // Spanish accent
-        } else if (hasItalian) {
-            accent = 'it'; // Italian accent
+        // Detect language if not provided
+        if (!lang) {
+            const hasSpanish = /[áéíóúñ¿¡]/i.test(text) || /hola|gracias|por favor/i.test(text);
+            const hasItalian = /[àèéìíòóùú]/i.test(text) || /ciao|grazie|prego/i.test(text);
+            
+            lang = 'en'; // Default to English
+            if (hasSpanish) {
+                lang = 'es'; // Spanish
+            } else if (hasItalian) {
+                lang = 'it'; // Italian
+            }
         }
+
+        // We'll let the server select the appropriate voice based on language
+        const ttsSettings = {
+            speed: 0.8,         // Slightly slower for better comprehension
+            model: 'tts-1-hd'   // Higher quality audio
+        };
+
+        // Get CSRF token from meta tag
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
         const response = await fetch('/api/text-to-speech', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ 
                 text: text,
                 lang: lang,
-                accent: accent
+                speed: ttsSettings.speed,
+                model: ttsSettings.model
             }),
         });
 
@@ -128,6 +140,7 @@ async function playAudio(button, text, lang) {
         }
 
         const data = await response.json();
+        console.log(`Playing audio in ${lang} with voice "${data.voice}"`);
         const audio = new Audio(data.audio_url);
 
         audio.onended = () => {

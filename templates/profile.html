@@ -16,32 +16,54 @@
                     <h5>Learning Preferences</h5>
                     {% if current_user.preferences %}
                     <ul class="list-unstyled">
-                        <li><strong>Target Language:</strong> 
-                            {% set lang_names = {
-                                'es': 'Spanish',
-                                'fr': 'French',
-                                'de': 'German',
-                                'it': 'Italian',
-                                'pt': 'Portuguese',
-                                'ja': 'Japanese',
-                                'ko': 'Korean',
-                                'zh': 'Mandarin Chinese',
-                                'ru': 'Russian',
-                                'ar': 'Arabic',
-                                'nl': 'Dutch',
-                                'pl': 'Polish',
-                                'tr': 'Turkish',
-                                'hi': 'Hindi',
-                                'vi': 'Vietnamese'
-                            } %}
-                            {{ lang_names[current_user.preferences.target_language] }}
+                        <li class="mb-3">
+                            <strong>Target Language:</strong> 
+                            <form id="quickLanguageForm" method="POST" action="{{ url_for('update_language') }}" class="mt-2">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="input-group input-group-sm">
+                                    <select name="target_language" class="form-select form-select-sm">
+                                        {% set lang_names = {
+                                            'es': 'Spanish',
+                                            'fr': 'French',
+                                            'de': 'German',
+                                            'it': 'Italian',
+                                            'pt': 'Portuguese',
+                                            'ja': 'Japanese',
+                                            'ko': 'Korean',
+                                            'zh': 'Mandarin Chinese',
+                                            'ru': 'Russian',
+                                            'ar': 'Arabic',
+                                            'nl': 'Dutch',
+                                            'pl': 'Polish',
+                                            'tr': 'Turkish',
+                                            'hi': 'Hindi',
+                                            'vi': 'Vietnamese'
+                                        } %}
+                                        {% for code, name in lang_names.items() %}
+                                            <option value="{{ code }}" 
+                                                {% if fresh_preferences and fresh_preferences.target_language == code %}
+                                                    selected
+                                                {% elif current_user.preferences.target_language == code %}
+                                                    selected
+                                                {% endif %}>
+                                                {{ name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                                </div>
+                            </form>
                         </li>
-                        <li><strong>Skill Level:</strong> {{ current_user.preferences.skill_level.title() }}</li>
-                        <li><strong>Daily Practice Goal:</strong> {{ current_user.preferences.practice_duration }} minutes</li>
+                        <li><strong>Skill Level:</strong> 
+                            {{ current_user.preferences.skill_level.title() if current_user.preferences and current_user.preferences.skill_level else "Not set" }}
+                        </li>
+                        <li><strong>Daily Practice Goal:</strong> 
+                            {{ current_user.preferences.practice_duration if current_user.preferences and current_user.preferences.practice_duration else "Not set" }} minutes
+                        </li>
                     </ul>
                     <div class="mt-3">
                         <a href="{{ url_for('preferences', edit=True) }}" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-pencil"></i> Edit Preferences
+                            <i class="bi bi-pencil"></i> Edit All Preferences
                         </a>
                     </div>
                     {% else %}

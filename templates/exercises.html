@@ -4,8 +4,11 @@
 <div class="row justify-content-center">
     <div class="col-md-10">
         <div class="card">
-            <div class="card-header bg-info text-white">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                 <h2 class="mb-0">Speaking Practice</h2>
+                <button id="start-practice" class="btn btn-light">
+                    <i class="bi bi-mic-fill me-1"></i> Start Practice
+                </button>
             </div>
             <div class="card-body">
                 <!-- Scenario Selection -->
@@ -18,7 +21,7 @@
                                     <h5 class="card-title">Restaurant Ordering</h5>
                                     <p class="card-text">Practice ordering food and drinks at a restaurant.</p>
                                     <button class="btn btn-info start-scenario" data-scenario="restaurant">
-                                        Start Practice
+                                        Start Scenario
                                     </button>
                                 </div>
                             </div>
@@ -29,7 +32,7 @@
                                     <h5 class="card-title">Travel Conversations</h5>
                                     <p class="card-text">Practice common travel situations and directions.</p>
                                     <button class="btn btn-info start-scenario" data-scenario="travel">
-                                        Start Practice
+                                        Start Scenario
                                     </button>
                                 </div>
                             </div>
@@ -40,7 +43,7 @@
                                     <h5 class="card-title">Daily Greetings</h5>
                                     <p class="card-text">Practice everyday conversations and greetings.</p>
                                     <button class="btn btn-info start-scenario" data-scenario="greetings">
-                                        Start Practice
+                                        Start Scenario
                                     </button>
                                 </div>
                             </div>
@@ -49,78 +52,54 @@
                 </div>
 
                 <!-- Practice Area -->
-                <div id="practice-area" style="display: none;">
-                    <div class="practice-content">
-                        <div class="scenario-description mb-4">
-                            <h4 id="scenario-title"></h4>
-                            <p id="scenario-description" class="lead"></p>
+                <div id="practice-area" class="mt-4 p-4 bg-light border rounded" style="display: none;">
+                    <h3>Speaking Practice</h3>
+                    
+                    <!-- Simple loading message -->
+                    <div id="loading-message" class="alert alert-info text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
-
-                        <!-- Example Audio -->
-                        <div class="example-audio mb-4">
-                            <h5>Listen to Example</h5>
-                            <button class="btn btn-secondary" id="play-example">
-                                <i class="bi bi-volume-up"></i> Play Example
-                            </button>
-                        </div>
-
-                        <!-- Recording Interface -->
-                        <div class="recording-interface mb-4">
-                            <h5>Your Turn</h5>
-                            <div class="d-flex gap-2 mb-3">
-                                <button class="btn btn-danger" id="start-recording">
-                                    <i class="bi bi-record-circle"></i> Start Recording
-                                </button>
-                                <button class="btn btn-secondary" id="stop-recording" disabled>
-                                    <i class="bi bi-stop-circle"></i> Stop Recording
-                                </button>
-                                <button class="btn btn-info" id="play-recording" disabled>
-                                    <i class="bi bi-play-circle"></i> Play Recording
-                                </button>
-                                <button class="btn btn-success" id="submit-recording" disabled>
-                                    <i class="bi bi-check-circle"></i> Submit Recording
-                                </button>
+                        <p class="mt-2">Loading scenario...</p>
+                    </div>
+                    
+                    <!-- Scenario content will be populated here -->
+                    <div id="scenario-content"></div>
+                    
+                    <!-- Status Messages Area -->
+                    <div id="status-area" class="mt-3"></div>
+                    
+                    <!-- Feedback container -->
+                    <div id="feedback-container" class="mt-4" style="display: none;">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h4>Your Pronunciation Feedback</h4>
                             </div>
-                            <div class="mb-3">
-                                <button class="btn btn-outline-info" id="show-hint">
-                                    <i class="bi bi-lightbulb"></i> Show Response Hints
-                                </button>
-                            </div>
-                            <div id="hint-area" class="alert alert-info" style="display: none;">
-                                <!-- Hints will be inserted here -->
-                            </div>
-                            <div class="recording-status">
-                                <span id="recording-timer" class="badge bg-danger" style="display: none;">
-                                    Recording: 0:00
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- Feedback Area -->
-                        <div id="feedback-area" class="mb-4" style="display: none;">
-                            <h5>Feedback</h5>
-                            <div class="card">
-                                <div class="card-body">
-                                    <div class="pronunciation-score mb-3">
-                                        <label>Pronunciation Score:</label>
-                                        <div class="progress">
-                                            <div id="pronunciation-progress" class="progress-bar bg-info"
-                                                 role="progressbar" style="width: 0%">
-                                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>Score</h5>
+                                        <div class="display-4 text-center" id="pronunciation-score">--</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>Feedback</h5>
+                                        <div id="feedback-text" class="border p-3 rounded bg-light">
+                                            Feedback will appear here after you submit your recording.
                                         </div>
                                     </div>
-                                    <div id="pronunciation-feedback">
-                                        <!-- Feedback will be inserted here -->
-                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button id="try-again-btn" class="btn btn-outline-primary">Try Again</button>
+                                    <button id="next-prompt-btn" class="btn btn-success">Next Prompt</button>
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Navigation Buttons -->
-                        <div class="d-flex justify-content-between mt-4">
-                            <button class="btn btn-secondary" id="prev-exercise">Previous</button>
-                            <button class="btn btn-info" id="next-exercise">Next Exercise</button>
-                        </div>
+                    </div>
+                    
+                    <!-- Navigation -->
+                    <div class="mt-4 d-flex justify-content-between">
+                        <button id="prev-exercise" class="btn btn-outline-primary" disabled>Previous</button>
+                        <button id="next-exercise" class="btn btn-outline-primary" disabled>Next</button>
                     </div>
                 </div>
             </div>

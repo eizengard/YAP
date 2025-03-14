@@ -54,10 +54,17 @@ chatForm.addEventListener('submit', async (e) => {
         appendMessage('user', message);
         chatInput.value = '';
 
+        // Get CSRF token from meta tag
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) {
+            console.warn('CSRF token not found. Request may fail.');
+        }
+
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken || ''
             },
             body: JSON.stringify({ message }),
         });
@@ -68,7 +75,13 @@ chatForm.addEventListener('submit', async (e) => {
         }
 
         // Add AI response to chat
-        appendMessage('assistant', data.response, true); // Added true to indicate it's an AI response
+        // Check if the response is a dictionary with content field or just a string
+        let responseContent = data.response;
+        if (typeof responseContent === 'object' && responseContent.content) {
+            responseContent = responseContent.content;
+        }
+        
+        appendMessage('assistant', responseContent, true);
 
     } catch (error) {
         console.error('Chat error:', error);
@@ -100,8 +113,103 @@ function appendMessage(role, content, canSpeak = false) {
         playButton.className = 'btn btn-sm btn-secondary ms-2';
         playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
 
+        // Add translate button
+        const translateButton = document.createElement('button');
+        translateButton.className = 'btn btn-sm btn-info ms-2';
+        translateButton.innerHTML = '<i class="bi bi-translate"></i>';
+        translateButton.title = 'Translate';
+
         let audio = null;
         let isPlaying = false;
+        let isTranslated = false;
+        let originalText = content;
+        
+        // Handle translation
+        translateButton.onclick = async () => {
+            try {
+                translateButton.disabled = true;
+                
+                if (!isTranslated) {
+                    translateButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+                    
+                    // Get CSRF token from meta tag
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    
+                    // Detect language of the content
+                    const hasSpanish = /[áéíóúñ¿¡]/i.test(content) || /hola|gracias|por favor/i.test(content);
+                    const hasItalian = /[àèéìíòóùú]/i.test(content) || /ciao|grazie|prego/i.test(content);
+                    const hasFrench = /[àâäæçéèêëîïôœùûüÿ]/i.test(content) || /bonjour|merci|s'il vous plaît/i.test(content);
+                    const hasGerman = /[äöüß]/i.test(content) || /guten tag|danke|bitte/i.test(content);
+                    
+                    // Default to assuming English if no other language markers are found
+                    let sourceLang = 'en';
+                    let targetLang = 'en'; // Will be updated
+                    
+                    if (hasSpanish) {
+                        sourceLang = 'es';
+                        targetLang = 'en'; // Translate from Spanish to English
+                    } else if (hasItalian) {
+                        sourceLang = 'it';
+                        targetLang = 'en'; // Translate from Italian to English
+                    } else if (hasFrench) {
+                        sourceLang = 'fr';
+                        targetLang = 'en'; // Translate from French to English
+                    } else if (hasGerman) {
+                        sourceLang = 'de';
+                        targetLang = 'en'; // Translate from German to English
+                    } else {
+                        // If the text is in English, translate to the user's learning language
+                        // First try to get user's current language from the page if available
+                        const langBadge = document.querySelector('.badge.bg-primary[data-lang]');
+                        if (langBadge) {
+                            targetLang = langBadge.dataset.lang;
+                        } else {
+                            // Default to Spanish if we can't detect
+                            targetLang = 'es';
+                        }
+                    }
+                    
+                    const response = await fetch('/api/translate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken || ''
+                        },
+                        body: JSON.stringify({ 
+                            text: content,
+                            source_lang: sourceLang,
+                            target_lang: targetLang
+                        }),
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Translation failed');
+                    }
+
+                    textSpan.textContent = data.translated_text;
+                    isTranslated = true;
+                    translateButton.innerHTML = '<i class="bi bi-translate"></i> Original';
+                } else {
+                    // Switch back to original text
+                    textSpan.textContent = originalText;
+                    isTranslated = false;
+                    translateButton.innerHTML = '<i class="bi bi-translate"></i>';
+                }
+            } catch (error) {
+                console.error('Translation error:', error);
+                textSpan.textContent = originalText;
+                translateButton.innerHTML = '<i class="bi bi-translate"></i>';
+                // Show error message in a small popup within the message
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'text-danger small mt-1';
+                errorMsg.textContent = `Translation error: ${error.message}`;
+                messageDiv.appendChild(errorMsg);
+                setTimeout(() => errorMsg.remove(), 5000); // Remove after 5 seconds
+            } finally {
+                translateButton.disabled = false;
+            }
+        };
 
         playButton.onclick = async () => {
             try {
@@ -113,36 +221,39 @@ function appendMessage(role, content, canSpeak = false) {
                     // Detect if the text contains mostly Spanish or Italian words
                     const hasSpanish = /[áéíóúñ¿¡]/i.test(content) || /hola|gracias|por favor/i.test(content);
                     const hasItalian = /[àèéìíòóùú]/i.test(content) || /ciao|grazie|prego/i.test(content);
-
-                    // Choose language and accent based on content
-                    let lang = 'en';
-                    let accent = 'com'; // Default to US English
-
+                    
+                    // Determine likely language for TTS
+                    let lang = 'en';    // Default to English
                     if (hasSpanish) {
-                        lang = 'es';
-                        accent = 'es'; // Spanish accent
+                        lang = 'es';    // Spanish
                     } else if (hasItalian) {
-                        lang = 'it';
-                        accent = 'it'; // Italian accent
+                        lang = 'it';    // Italian
                     }
+
+                    // Get CSRF token from meta tag
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
                     const response = await fetch('/api/text-to-speech', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
                         },
                         body: JSON.stringify({ 
                             text: content,
-                            lang: lang,
-                            accent: accent
+                            lang: lang,  // Pass detected language
+                            speed: 0.8,  // Slightly slower for better comprehension
+                            model: 'tts-1-hd'  // Higher quality audio
                         }),
                     });
 
                     const data = await response.json();
                     if (!response.ok) {
+                        console.error('TTS error:', data.error);
                         throw new Error(data.error || 'Text-to-speech failed');
                     }
 
+                    console.log(`Playing audio in ${lang} with voice "${data.voice}"`);
                     audio = new Audio(data.audio_url);
 
                     // Add audio event listeners
@@ -151,9 +262,9 @@ function appendMessage(role, content, canSpeak = false) {
                         playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
                     };
 
-                    audio.onerror = () => {
-                        console.error("Audio playback failed");
-                        appendMessage('system', 'Failed to play audio');
+                    audio.onerror = (e) => {
+                        console.error("Audio playback failed", e);
+                        appendMessage('system', 'Failed to play audio: ' + (e.message || 'Unknown error'));
                         playButton.disabled = false;
                         playButton.innerHTML = '<i class="bi bi-volume-up"></i>';
                     };
@@ -193,6 +304,7 @@ function appendMessage(role, content, canSpeak = false) {
         };
 
         audioControls.appendChild(playButton);
+        audioControls.appendChild(translateButton);
         messageDiv.appendChild(audioControls);
     }
 
@@ -248,3 +360,34 @@ voiceButton.addEventListener('click', async () => {
         voiceButton.classList.remove('recording');
     }
 });
+
+function textToSpeech(text, voice = 'nova') {
+    // Get CSRF token from meta tag
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    fetch('/api/text-to-speech', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            text: text,
+            voice: voice
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            console.error('Error:', data.error);
+            return;
+        }
+        
+        // Play the audio
+        const audio = new Audio(data.audio_url);
+        audio.play();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}

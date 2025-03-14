@@ -21,6 +21,12 @@
                         </div>
                     </div>
 
+                    {% if language_mismatch %}
+                    <div class="alert alert-warning mb-3">
+                        <strong>Notice:</strong> Your selected language has changed. Please generate new vocabulary words for your current language preference.
+                    </div>
+                    {% endif %}
+
                     {% if not daily_set or not daily_set.vocabulary_items %}
                     <div class="text-center py-5">
                         <p class="lead">No vocabulary words available for today.</p>
@@ -108,7 +114,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/translation.js') }}"></script>
 <script>
 function enableEditing(wordId) {
     const textarea = document.getElementById(`sentence-${wordId}`);
@@ -131,10 +136,14 @@ document.addEventListener('DOMContentLoaded', function() {
             generateBtn.disabled = true;
             generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
 
+            // Get CSRF token from meta tag
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
             const response = await fetch('/api/generate-vocabulary', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
                 }
             });
 
@@ -160,27 +169,26 @@ async function playAudio(button, text, lang) {
         const originalHTML = button.innerHTML;
         button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
 
-        // Detect if the text contains mostly Spanish or Italian words
-        const hasSpanish = /[áéíóúñ¿¡]/i.test(text) || /hola|gracias|por favor/i.test(text);
-        const hasItalian = /[àèéìíòóùú]/i.test(text) || /ciao|grazie|prego/i.test(text);
+        // We'll let the server select the appropriate voice based on language
+        const ttsSettings = {
+            speed: 0.8,         // Slightly slower for better comprehension
+            model: 'tts-1-hd'   // Higher quality audio
+        };
 
-        // Choose language and accent based on content
-        let accent = 'com'; // Default to US English
-        if (hasSpanish) {
-            accent = 'es'; // Spanish accent
-        } else if (hasItalian) {
-            accent = 'it'; // Italian accent
-        }
+        // Get CSRF token from meta tag
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
         const response = await fetch('/api/text-to-speech', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ 
                 text: text,
                 lang: lang,
-                accent: accent
+                speed: ttsSettings.speed,
+                model: ttsSettings.model
             }),
         });
 
@@ -190,6 +198,8 @@ async function playAudio(button, text, lang) {
 
         const data = await response.json();
         const audio = new Audio(data.audio_url);
+        
+        console.log(`Playing audio for language "${lang}" with voice "${data.voice}"`);
 
         audio.onended = () => {
             button.innerHTML = originalHTML;

@@ -95,14 +95,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentWord) return;
 
         try {
+            // Get CSRF token from meta tag
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            
             const response = await fetch('/api/text-to-speech', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify({
                     text: currentWord.word,
-                    lang: currentWord.language
+                    lang: currentWord.language,
+                    speed: 0.8,         // Slightly slower for better comprehension
+                    model: 'tts-1-hd'   // Higher quality audio
                 }),
             });
 
@@ -110,6 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to generate audio');
             }
+
+            console.log(`Playing audio for "${currentWord.word}" (${currentWord.language}) with voice "${data.voice}"`);
 
             if (audioPlayer) {
                 audioPlayer.pause();
