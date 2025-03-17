@@ -3,13 +3,20 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:next": "cd nextjs-app && npm run dev",
+    "dev:flask": "python3 main.py",
+    "dev": "concurrently \"npm run dev:flask\" \"npm run dev:next\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "canvas-confetti": "^1.9.3"
+    "canvas-confetti": "^1.9.3",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }

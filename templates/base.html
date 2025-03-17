@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Language Learning App</title>
+    <title>YAP - Your AI Practice Partner</title>
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
@@ -12,7 +12,9 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="/">Language Learner</a>
+            <a class="navbar-brand" href="/">
+                <span class="yap-logo">YAP</span>
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -20,14 +22,19 @@
                 <ul class="navbar-nav me-auto">
                     {% if current_user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('chat') }}">Chat</a>
+                        <a class="nav-link" href="{{ url_for('conversation_practice') }}">Conversation Practice</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('exercises') }}">Exercises</a>
+                        <a class="nav-link" href="{{ url_for('speaking_practice') }}">Speaking Practice</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('daily_practice') }}">Daily Practice</a>
+                        <a class="nav-link" href="{{ url_for('vocabulary_practice') }}">Vocabulary Practice</a>
                     </li>
+                    {% if 'nextjs_app' is defined %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('nextjs_app') }}">Next.js App</a>
+                    </li>
+                    {% endif %}
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">
@@ -35,40 +42,40 @@
                     {% if current_user.preferences %}
                     <li class="nav-item">
                         <span class="nav-link">
-                            <span class="badge bg-primary" data-lang="{{ current_user.preferences.target_language }}">
-                                {% set lang_names = {
-                                    'es': 'Spanish',
-                                    'fr': 'French',
-                                    'de': 'German',
-                                    'it': 'Italian',
-                                    'pt': 'Portuguese',
-                                    'ja': 'Japanese',
-                                    'ko': 'Korean',
-                                    'zh': 'Mandarin Chinese',
-                                    'ru': 'Russian',
-                                    'ar': 'Arabic',
-                                    'nl': 'Dutch',
-                                    'pl': 'Polish',
-                                    'tr': 'Turkish',
-                                    'hi': 'Hindi',
-                                    'vi': 'Vietnamese'
-                                } %}
+                            <span class="language-badge" data-lang="{{ current_user.preferences.target_language }}">
+                                {% set lang_names = {'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian', 'pt': 'Portuguese'} %}
                                 <i class="bi bi-translate"></i> 
                                 Learning {{ lang_names[current_user.preferences.target_language] }}
                             </span>
                         </span>
                     </li>
                     {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('profile') }}">
-                            <i class="bi bi-person-circle"></i> Profile
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <span class="nav-link">Welcome, {{ current_user.username }}!</span>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('profile') }}">
+                                    <i class="bi bi-person"></i> Profile
+                                </a>
+                            </li>
+                            {% if current_user.wallet_address %}
+                            <li>
+                                <span class="dropdown-item">
+                                    <span class="wallet-badge">
+                                        <i class="bi bi-wallet-fill"></i> Wallet Connected
+                                    </span>
+                                </span>
+                            </li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('logout') }}">
+                                    <i class="bi bi-box-arrow-right"></i> Logout
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                     {% else %}
                     <li class="nav-item">
@@ -101,6 +108,66 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/translation.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/wallet-connect.js') }}"></script>
+    
+    <!-- Web3 wallet detection script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is logged in and has a wallet connected
+            {% if current_user.is_authenticated and current_user.wallet_address %}
+                // Listen for account changes in MetaMask
+                if (window.ethereum) {
+                    console.log('MetaMask detected, setting up account change listeners');
+                    
+                    // Handle account changes
+                    window.ethereum.on('accountsChanged', function (accounts) {
+                        console.log('MetaMask account changed:', accounts);
+                        
+                        // If no accounts or different account, disconnect wallet
+                        if (!accounts.length || accounts[0].toLowerCase() !== '{{ current_user.wallet_address }}'.toLowerCase()) {
+                            console.log('Account mismatch, disconnecting wallet');
+                            
+                            // Show notification
+                            const walletAlert = document.createElement('div');
+                            walletAlert.className = 'alert alert-warning alert-dismissible fade show';
+                            walletAlert.innerHTML = `
+                                <strong>Wallet Changed!</strong> Your connected wallet has changed. Logging out...
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            `;
+                            document.querySelector('.container.mt-4').prepend(walletAlert);
+                            
+                            // Disconnect wallet after a short delay
+                            setTimeout(async () => {
+                                try {
+                                    const response = await fetch('/api/user/unlink-wallet', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                                        }
+                                    });
+                                    
+                                    const data = await response.json();
+                                    if (data.success) {
+                                        window.location.href = data.redirect || '/login';
+                                    }
+                                } catch (error) {
+                                    console.error('Error disconnecting wallet:', error);
+                                }
+                            }, 2000);
+                        }
+                    });
+                    
+                    // Handle chain changes
+                    window.ethereum.on('chainChanged', function (chainId) {
+                        console.log('MetaMask chain changed:', chainId);
+                        // Optionally handle chain changes if needed
+                    });
+                }
+            {% endif %}
+        });
+    </script>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>

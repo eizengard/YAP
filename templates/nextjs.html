@@ -1,0 +1,54 @@
+{% extends "tubelight_base.html" %}
+
+{% block content %}
+<div class="nextjs-container">
+    <iframe 
+        src="http://localhost:3000" 
+        frameborder="0" 
+        style="width: 100%; height: 100vh; border: none; overflow: hidden;"
+        id="nextjs-iframe"
+        allowfullscreen
+    ></iframe>
+</div>
+
+<style>
+    /* Remove padding from container for full-width iframe */
+    .container {
+        max-width: 100%;
+        padding: 0;
+        margin: 0;
+        width: 100%;
+    }
+    
+    .nextjs-container {
+        margin: -1.5rem; /* Counteract the container padding */
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Add class to body for styling
+    document.body.classList.add('nextjs-page');
+    
+    // Adjust iframe height when window is resized
+    document.addEventListener('DOMContentLoaded', function() {
+        const iframe = document.getElementById('nextjs-iframe');
+        
+        // Adjust iframe height when window is resized
+        function adjustIframeHeight() {
+            const viewportHeight = window.innerHeight;
+            // Account for the tubelight navbar at the top
+            const navbarHeight = document.querySelector('.tubelight-navbar-desktop')?.offsetHeight || 0;
+            iframe.style.height = (viewportHeight - navbarHeight - 20) + 'px';
+        }
+        
+        // Initial adjustment - wait for navbar to be created
+        setTimeout(adjustIframeHeight, 500);
+        
+        // Adjust on resize
+        window.addEventListener('resize', adjustIframeHeight);
+    });
+</script>
+{% endblock %} 

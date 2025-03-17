@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "tubelight_base.html" %}
 
 {% block content %}
 <div class="container py-4">
@@ -43,7 +43,7 @@
                                             <option value="{{ code }}" 
                                                 {% if fresh_preferences and fresh_preferences.target_language == code %}
                                                     selected
-                                                {% elif current_user.preferences.target_language == code %}
+                                                {% elif current_user.preferences and current_user.preferences.target_language == code %}
                                                     selected
                                                 {% endif %}>
                                                 {{ name }}
@@ -66,8 +66,59 @@
                             <i class="bi bi-pencil"></i> Edit All Preferences
                         </a>
                     </div>
+                    {% elif fresh_preferences %}
+                    <!-- Similar UI but using fresh_preferences -->
+                    <ul class="list-unstyled">
+                        <li class="mb-3">
+                            <strong>Target Language:</strong> 
+                            <form id="quickLanguageForm" method="POST" action="{{ url_for('update_language') }}" class="mt-2">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="input-group input-group-sm">
+                                    <select name="target_language" class="form-select form-select-sm">
+                                        {% set lang_names = {
+                                            'es': 'Spanish',
+                                            'fr': 'French',
+                                            'de': 'German',
+                                            'it': 'Italian',
+                                            'pt': 'Portuguese',
+                                            'ja': 'Japanese',
+                                            'ko': 'Korean',
+                                            'zh': 'Mandarin Chinese',
+                                            'ru': 'Russian',
+                                            'ar': 'Arabic',
+                                            'nl': 'Dutch',
+                                            'pl': 'Polish',
+                                            'tr': 'Turkish',
+                                            'hi': 'Hindi',
+                                            'vi': 'Vietnamese'
+                                        } %}
+                                        {% for code, name in lang_names.items() %}
+                                            <option value="{{ code }}" 
+                                                {% if fresh_preferences.target_language == code %}
+                                                    selected
+                                                {% endif %}>
+                                                {{ name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                                </div>
+                            </form>
+                        </li>
+                        <li><strong>Skill Level:</strong> 
+                            {{ fresh_preferences.skill_level.title() if fresh_preferences.skill_level else "Not set" }}
+                        </li>
+                        <li><strong>Daily Practice Goal:</strong> 
+                            {{ fresh_preferences.practice_duration if fresh_preferences.practice_duration else "Not set" }} minutes
+                        </li>
+                    </ul>
+                    <div class="mt-3">
+                        <a href="{{ url_for('preferences', edit=True) }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-pencil"></i> Edit All Preferences
+                        </a>
+                    </div>
                     {% else %}
-                    <p>No preferences set. <a href="{{ url_for('preferences') }}">Set your preferences</a></p>
+                    <p>No preferences set. <a href="{{ url_for('fix_preferences') }}" class="btn btn-primary btn-sm">Create Default Preferences</a></p>
                     {% endif %}
                 </div>
             </div>
@@ -129,5 +180,101 @@
             </div>
         </div>
     </div>
+
+    <!-- Add this section to your profile page -->
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h3>Wallet Connection</h3>
+        </div>
+        <div class="card-body">
+            {% if current_user.wallet_address %}
+                <p><strong>Connected Wallet:</strong> {{ current_user.wallet_address[:10] }}...{{ current_user.wallet_address[-8:] }}</p>
+                <button id="disconnect-wallet" class="btn btn-danger">Disconnect Wallet</button>
+            {% else %}
+                <p>No wallet connected to your account.</p>
+                <button id="connect-wallet" class="btn btn-primary">Connect Wallet</button>
+            {% endif %}
+        </div>
+    </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Connect wallet functionality (if button exists)
+        const connectWalletBtn = document.getElementById('connect-wallet');
+        if (connectWalletBtn) {
+            connectWalletBtn.addEventListener('click', async function() {
+                try {
+                    // Use our wallet utility to connect
+                    YAPWallet.setButtonLoading(connectWalletBtn, 'Connecting...');
+                    
+                    // Connect to wallet
+                    const connectResult = await YAPWallet.connect();
+                    
+                    if (!connectResult.success) {
+                        // If wallet needs to be installed, show installation options
+                        if (connectResult.needsInstall) {
+                            YAPWallet.showInstallOptions(connectWalletBtn.parentNode);
+                            YAPWallet.resetButton(connectWalletBtn);
+                            return;
+                        }
+                        
+                        throw new Error(connectResult.error);
+                    }
+                    
+                    // Link wallet to account
+                    const linkResult = await YAPWallet.link(connectResult.walletAddress);
+                    
+                    if (!linkResult.success) {
+                        throw new Error(linkResult.error || 'Failed to link wallet');
+                    }
+                    
+                    // Show success message
+                    YAPWallet.showAlert(connectWalletBtn.parentNode, 'success', 'Wallet connected successfully!', false);
+                    
+                    // Reload the page after a short delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } catch (error) {
+                    console.error('Error connecting wallet:', error);
+                    YAPWallet.resetButton(connectWalletBtn);
+                    YAPWallet.showAlert(connectWalletBtn.parentNode, 'danger', error.message || 'Error connecting wallet');
+                }
+            });
+        }
+        
+        // Disconnect wallet functionality
+        const disconnectWalletBtn = document.getElementById('disconnect-wallet');
+        if (disconnectWalletBtn) {
+            disconnectWalletBtn.addEventListener('click', async function() {
+                if (confirm('Are you sure you want to disconnect your wallet? This will log you out.')) {
+                    try {
+                        // Show loading state
+                        YAPWallet.setButtonLoading(disconnectWalletBtn, 'Disconnecting...');
+                        
+                        // Disconnect wallet
+                        const result = await YAPWallet.disconnect();
+                        
+                        if (result.success) {
+                            // Show success message
+                            YAPWallet.showAlert(disconnectWalletBtn.parentNode, 'success', 'Wallet disconnected successfully. Logging out...', false);
+                            
+                            // Redirect after a short delay
+                            setTimeout(() => {
+                                window.location.href = result.redirect || '/login';
+                            }, 1500);
+                        } else {
+                            throw new Error(result.error || 'Failed to disconnect wallet');
+                        }
+                    } catch (error) {
+                        console.error('Error disconnecting wallet:', error);
+                        YAPWallet.resetButton(disconnectWalletBtn);
+                        YAPWallet.showAlert(disconnectWalletBtn.parentNode, 'danger', error.message || 'Error disconnecting wallet');
+                    }
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}

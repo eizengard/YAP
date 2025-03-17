@@ -1,40 +1,154 @@
-{% extends "base.html" %}
+{% extends "tubelight_base.html" %}
 
 {% block content %}
-<div class="row justify-content-center">
+<div class="container mt-5">
+  <div class="row justify-content-center">
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h2 class="mb-0">Login</h2>
+      <div class="card bg-dark border-secondary">
+        <div class="card-body p-4">
+          <h2 class="text-center text-light mb-4">Login</h2>
+          
+          <!-- Alert Container -->
+          <div id="alertContainer" class="mb-3" style="display: none;">
+            <div id="alertMessage" class="alert" role="alert"></div>
+          </div>
+          
+          <!-- Traditional Login Form -->
+          <form method="POST" action="{{ url_for('login') }}">
+            <div class="mb-3">
+              <label for="email" class="form-label text-light">Email</label>
+              <input type="email" class="form-control bg-dark text-light border-secondary" id="email" name="email" required>
             </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('login') }}">
-                    {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        {{ form.email.label(class="form-label") }}
-                        {{ form.email(class="form-control") }}
-                        {% if form.email.errors %}
-                            {% for error in form.email.errors %}
-                                <div class="alert alert-danger">{{ error }}</div>
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-                    <div class="mb-3">
-                        {{ form.password.label(class="form-label") }}
-                        {{ form.password(class="form-control") }}
-                        {% if form.password.errors %}
-                            {% for error in form.password.errors %}
-                                <div class="alert alert-danger">{{ error }}</div>
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-                    {{ form.submit(class="btn btn-primary") }}
-                </form>
-                <div class="mt-3">
-                    <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
-                </div>
+            <div class="mb-3">
+              <label for="password" class="form-label text-light">Password</label>
+              <input type="password" class="form-control bg-dark text-light border-secondary" id="password" name="password" required>
             </div>
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary">Login</button>
+            </div>
+          </form>
+
+          <!-- Divider -->
+          <div class="text-center my-4">
+            <span class="text-light">or</span>
+          </div>
+
+          <!-- Wallet Connection -->
+          <div class="d-grid gap-2">
+            <button id="connectWalletBtn" class="btn btn-outline-success">
+              <i class="bi bi-wallet2"></i> Connect MetaMask
+            </button>
+          </div>
+
+          <!-- Registration Link -->
+          <div class="text-center mt-4">
+            <p class="text-light mb-0">Don't have an account? <a href="{{ url_for('register') }}" class="text-primary">Register here</a></p>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 </div>
+
+<!-- Simple MetaMask connection script -->
+<script>
+// Function to show alerts
+function showAlert(message, type) {
+    // Use the YAPWallet.showAlert function with string parameters
+    YAPWallet.showAlert(message, type);
+}
+
+// MetaMask connection handler
+document.getElementById('connectWalletBtn').addEventListener('click', async () => {
+    const button = document.getElementById('connectWalletBtn');
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Connecting...';
+    
+    try {
+        // Check if MetaMask is installed
+        if (typeof window.ethereum === 'undefined') {
+            YAPWallet.showAlert('MetaMask is not installed. Please install MetaMask to connect your wallet.', 'warning');
+            return;
+        }
+        
+        // Request account access
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const account = accounts[0];
+        
+        if (!account) {
+            throw new Error('No account selected in MetaMask');
+        }
+        
+        YAPWallet.showAlert('Wallet connected! Logging in...', 'info');
+        
+        // Get CSRF token from meta tag
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        
+        // Send the wallet address to the server
+        const response = await fetch('/wallet-login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken || '',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ wallet_address: account })
+        });
+        
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type');
+        let data;
+        
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            // Handle non-JSON response (likely HTML error page)
+            const text = await response.text();
+            console.error('Server returned non-JSON response:', text);
+            
+            if (text.includes('<!doctype') || text.includes('<html')) {
+                console.error('Received HTML response instead of JSON');
+                
+                // Check if it's a CSRF token error
+                if (text.includes('CSRF') || text.includes('csrf')) {
+                    throw new Error('CSRF validation failed. Please refresh the page and try again.');
+                }
+                
+                // Check for common error messages
+                if (text.includes('Internal Server Error')) {
+                    throw new Error('Server error occurred. Please try again later.');
+                }
+                
+                throw new Error('Server returned an HTML page instead of JSON data');
+            }
+            
+            throw new Error('Server returned an invalid response format');
+        }
+        
+        if (response.ok) {
+            YAPWallet.showAlert('Login successful! Redirecting...', 'success');
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+        } else {
+            throw new Error(data.error || 'Failed to login with wallet');
+        }
+    } catch (error) {
+        console.error('Wallet connection error:', error);
+        YAPWallet.showAlert(error.message || 'Failed to connect wallet', 'danger');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-wallet2"></i> Connect MetaMask';
+    }
+});
+
+// Handle account changes
+if (typeof window.ethereum !== 'undefined') {
+    window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length === 0) {
+            YAPWallet.showAlert('Wallet disconnected', 'warning');
+        }
+    });
+}
+</script>
 {% endblock %}

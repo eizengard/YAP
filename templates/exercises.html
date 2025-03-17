@@ -1,48 +1,48 @@
-{% extends "base.html" %}
+{% extends "tubelight_base.html" %}
 
 {% block content %}
-<div class="row justify-content-center">
+<div class="row justify-content-center mt-4">
     <div class="col-md-10">
-        <div class="card">
-            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center py-3">
                 <h2 class="mb-0">Speaking Practice</h2>
                 <button id="start-practice" class="btn btn-light">
-                    <i class="bi bi-mic-fill me-1"></i> Start Practice
+                    <i class="bi bi-mic-fill me-2"></i> Start Practice
                 </button>
             </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <!-- Scenario Selection -->
-                <div class="mb-4">
-                    <h4>Choose a Scenario</h4>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <div class="card scenario-card">
-                                <div class="card-body">
-                                    <h5 class="card-title">Restaurant Ordering</h5>
-                                    <p class="card-text">Practice ordering food and drinks at a restaurant.</p>
-                                    <button class="btn btn-info start-scenario" data-scenario="restaurant">
+                <div class="mb-5">
+                    <h4 class="mb-4">Choose a Scenario</h4>
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="card scenario-card h-100 shadow-sm">
+                                <div class="card-body p-4">
+                                    <h5 class="card-title mb-3">Restaurant Ordering</h5>
+                                    <p class="card-text mb-4">Practice ordering food and drinks at a restaurant.</p>
+                                    <button class="btn btn-info start-scenario w-100" data-scenario="restaurant">
                                         Start Scenario
                                     </button>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card scenario-card">
-                                <div class="card-body">
-                                    <h5 class="card-title">Travel Conversations</h5>
-                                    <p class="card-text">Practice common travel situations and directions.</p>
-                                    <button class="btn btn-info start-scenario" data-scenario="travel">
+                        <div class="col-md-4">
+                            <div class="card scenario-card h-100 shadow-sm">
+                                <div class="card-body p-4">
+                                    <h5 class="card-title mb-3">Travel Conversations</h5>
+                                    <p class="card-text mb-4">Practice common travel situations and directions.</p>
+                                    <button class="btn btn-info start-scenario w-100" data-scenario="travel">
                                         Start Scenario
                                     </button>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card scenario-card">
-                                <div class="card-body">
-                                    <h5 class="card-title">Daily Greetings</h5>
-                                    <p class="card-text">Practice everyday conversations and greetings.</p>
-                                    <button class="btn btn-info start-scenario" data-scenario="greetings">
+                        <div class="col-md-4">
+                            <div class="card scenario-card h-100 shadow-sm">
+                                <div class="card-body p-4">
+                                    <h5 class="card-title mb-3">Daily Greetings</h5>
+                                    <p class="card-text mb-4">Practice everyday conversations and greetings.</p>
+                                    <button class="btn btn-info start-scenario w-100" data-scenario="greetings">
                                         Start Scenario
                                     </button>
                                 </div>
@@ -52,44 +52,44 @@
                 </div>
 
                 <!-- Practice Area -->
-                <div id="practice-area" class="mt-4 p-4 bg-light border rounded" style="display: none;">
-                    <h3>Speaking Practice</h3>
+                <div id="practice-area" class="mt-5 p-4 bg-light border rounded" style="display: none;">
+                    <h3 class="mb-4">Speaking Practice</h3>
                     
                     <!-- Simple loading message -->
-                    <div id="loading-message" class="alert alert-info text-center">
+                    <div id="loading-message" class="alert alert-info text-center p-4">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-2">Loading scenario...</p>
+                        <p class="mt-3">Loading scenario...</p>
                     </div>
                     
                     <!-- Scenario content will be populated here -->
-                    <div id="scenario-content"></div>
+                    <div id="scenario-content" class="p-4"></div>
                     
                     <!-- Status Messages Area -->
-                    <div id="status-area" class="mt-3"></div>
+                    <div id="status-area" class="mt-4"></div>
                     
                     <!-- Feedback container -->
-                    <div id="feedback-container" class="mt-4" style="display: none;">
-                        <div class="card">
-                            <div class="card-header bg-primary text-white">
-                                <h4>Your Pronunciation Feedback</h4>
+                    <div id="feedback-container" class="mt-5" style="display: none;">
+                        <div class="card shadow">
+                            <div class="card-header bg-primary text-white py-3">
+                                <h4 class="mb-0">Your Pronunciation Feedback</h4>
                             </div>
-                            <div class="card-body">
-                                <div class="row">
+                            <div class="card-body p-4">
+                                <div class="row g-4">
                                     <div class="col-md-6">
-                                        <h5>Score</h5>
-                                        <div class="display-4 text-center" id="pronunciation-score">--</div>
+                                        <h5 class="mb-3">Score</h5>
+                                        <div class="display-4 text-center mb-3" id="pronunciation-score">--</div>
                                     </div>
                                     <div class="col-md-6">
-                                        <h5>Feedback</h5>
-                                        <div id="feedback-text" class="border p-3 rounded bg-light">
+                                        <h5 class="mb-3">Feedback</h5>
+                                        <div id="feedback-text" class="border p-4 rounded bg-light">
                                             Feedback will appear here after you submit your recording.
                                         </div>
                                     </div>
                                 </div>
-                                <div class="mt-3">
-                                    <button id="try-again-btn" class="btn btn-outline-primary">Try Again</button>
+                                <div class="mt-4">
+                                    <button id="try-again-btn" class="btn btn-outline-primary me-2">Try Again</button>
                                     <button id="next-prompt-btn" class="btn btn-success">Next Prompt</button>
                                 </div>
                             </div>
@@ -97,7 +97,7 @@
                     </div>
                     
                     <!-- Navigation -->
-                    <div class="mt-4 d-flex justify-content-between">
+                    <div class="mt-5 d-flex justify-content-between">
                         <button id="prev-exercise" class="btn btn-outline-primary" disabled>Previous</button>
                         <button id="next-exercise" class="btn btn-outline-primary" disabled>Next</button>
                     </div>

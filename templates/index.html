@@ -1,165 +1,209 @@
-{% extends "base.html" %}
+{% extends "tubelight_base.html" %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8 text-center">
-        <h1 class="display-4 mb-4">Welcome to Language Learner</h1>
-        <p class="lead">Start your language learning journey today with our interactive platform.</p>
+<div class="container mt-5">
+  <!-- Welcome Section -->
+  <div class="row mb-5">
+    <div class="col-12 text-center">
+      <h1 class="display-4 text-light mb-4">Welcome to <span class="yap-logo">YAP</span></h1>
+      <p class="lead text-light mb-5">Your AI-powered language practice partner.</p>
     </div>
+  </div>
+
+  <!-- Features Section -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <h2 class="text-light mb-4">Revolutionizing Language Learning</h2>
+      <div class="row g-4">
+        <div class="col-md-4">
+          <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+              <h3 class="card-title text-primary">
+                <i class="bi bi-robot me-2"></i>AI-Powered Learning
+              </h3>
+              <p class="card-text text-light">Experience personalized language learning with advanced AI technology that adapts to your pace and learning style.</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+              <h3 class="card-title text-primary">
+                <i class="bi bi-graph-up me-2"></i>Track Progress
+              </h3>
+              <p class="card-text text-light">Monitor your improvement with detailed analytics and progress tracking, ensuring you stay motivated on your language learning journey.</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-dark border-secondary h-100">
+            <div class="card-body">
+              <h3 class="card-title text-primary">
+                <i class="bi bi-wallet me-2"></i>Web3 Integration
+              </h3>
+              <p class="card-text text-light">Connect your wallet to access exclusive features and participate in our language learning ecosystem.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Practice Sections -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <h2 class="text-light mb-4">Start Learning Today</h2>
+      <div class="row g-4">
+        <div class="col-md-4">
+          <div class="card bg-dark border-secondary h-100">
+            <div class="card-body text-center">
+              <i class="bi bi-book display-4 text-primary mb-3"></i>
+              <h3 class="card-title text-light">Vocabulary Practice</h3>
+              <p class="card-text text-light">Expand your vocabulary with personalized word lists and interactive exercises.</p>
+              <a href="{{ url_for('vocabulary_practice') }}" class="btn btn-primary mt-3">Start Practice</a>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-dark border-secondary h-100">
+            <div class="card-body text-center">
+              <i class="bi bi-chat-dots display-4 text-primary mb-3"></i>
+              <h3 class="card-title text-light">Conversation Practice</h3>
+              <p class="card-text text-light">Chat with our AI in your target language to improve your conversational skills.</p>
+              <a href="{{ url_for('conversation_practice') }}" class="btn btn-primary mt-3">Start Chatting</a>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-dark border-secondary h-100">
+            <div class="card-body text-center">
+              <i class="bi bi-mic display-4 text-primary mb-3"></i>
+              <h3 class="card-title text-light">Speaking Practice</h3>
+              <p class="card-text text-light">Practice pronunciation and speaking with AI-powered feedback.</p>
+              <a href="{{ url_for('speaking_practice') }}" class="btn btn-primary mt-3">Start Speaking</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if current_user.is_authenticated %}
+  <!-- Today's Vocabulary Section -->
+  <div class="row">
+    <div class="col-12">
+      <h2 class="text-light mb-4">Today's Vocabulary</h2>
+      <div class="row g-4">
+        {% for word in today_words %}
+        <div class="col-md-4">
+          <div class="card bg-dark border-secondary">
+            <div class="card-body">
+              <h3 class="text-primary mb-2">{{ word.word }}</h3>
+              <p class="text-secondary mb-2">{{ word.translation }}</p>
+              <p class="text-light mb-3">{{ word.example }}</p>
+              <div class="mb-3">
+                <label class="form-label text-light">Write a sentence using this word:</label>
+                <input type="text" class="form-control bg-dark text-light border-secondary" id="sentence-{{ loop.index }}">
+                <button class="btn btn-primary mt-2" onclick="submitSentence('{{ word.word }}', {{ loop.index }})">Submit</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
-{% if current_user.is_authenticated %}
-    <div class="row mt-5">
-        <div class="col-md-4">
-            <div class="card h-100 border-primary">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="card-title mb-0">Vocabulary Practice</h5>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Practice new vocabulary words every day to build your language skills.</p>
-                    <a href="{{ url_for('daily_practice') }}" class="btn btn-primary">Start Vocabulary Practice</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card h-100 border-success">
-                <div class="card-header bg-success text-white">
-                    <h5 class="card-title mb-0">Chat Practice</h5>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Practice conversations with our AI language tutor to improve fluency.</p>
-                    <a href="{{ url_for('chat') }}" class="btn btn-success">Start Chatting</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card h-100 border-info">
-                <div class="card-header bg-info text-white">
-                    <h5 class="card-title mb-0">Speaking Practice</h5>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Complete interactive speaking exercises to enhance your pronunciation.</p>
-                    <a href="{{ url_for('exercises') }}" class="btn btn-info">Start Speaking</a>
-                </div>
-            </div>
-        </div>
-    </div>
-{% else %}
-    <div class="row mt-5">
-        <div class="col-md-6 mx-auto text-center">
-            <div class="card">
-                <div class="card-body">
-                    <h2>Get Started</h2>
-                    <p class="lead">Create an account to begin your language learning journey.</p>
-                    <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Sign Up Now</a>
-                </div>
-            </div>
-        </div>
-    </div>
-{% endif %}
+<script>
+async function submitSentence(word, index) {
+  const sentence = document.getElementById(`sentence-${index}`).value;
+  try {
+    const response = await fetch('/api/submit-sentence', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ word, sentence })
+    });
+    if (response.ok) {
+      alert('Sentence submitted successfully!');
+    } else {
+      alert('Failed to submit sentence. Please try again.');
+    }
+  } catch (error) {
+    alert('Error submitting sentence: ' + error.message);
+  }
+}
+</script>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const generateBtn = document.getElementById('generate-vocab-btn');
-    if (generateBtn) {
-        generateBtn.addEventListener('click', async function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        // Function to generate vocabulary
+        async function generateVocabulary() {
             try {
-                generateBtn.disabled = true;
-                generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
-
                 const response = await fetch('/api/generate-vocabulary', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
                     }
                 });
-
-                if (!response.ok) {
-                    throw new Error('Failed to generate vocabulary');
+                
+                const data = await response.json();
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    console.error('Error generating vocabulary:', data.error);
+                    alert('Failed to generate vocabulary: ' + data.error);
                 }
-
-                // Reload the page to show new vocabulary
-                window.location.reload();
             } catch (error) {
                 console.error('Error:', error);
-                alert('Failed to generate vocabulary. Please try again.');
-            } finally {
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = 'Generate New Words';
-            }
-        });
-    }
-});
-
-async function playAudio(button, text, lang) {
-    try {
-        button.disabled = true;
-        const originalHTML = button.innerHTML;
-        button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
-
-        // Detect language if not provided
-        if (!lang) {
-            const hasSpanish = /[áéíóúñ¿¡]/i.test(text) || /hola|gracias|por favor/i.test(text);
-            const hasItalian = /[àèéìíòóùú]/i.test(text) || /ciao|grazie|prego/i.test(text);
-            
-            lang = 'en'; // Default to English
-            if (hasSpanish) {
-                lang = 'es'; // Spanish
-            } else if (hasItalian) {
-                lang = 'it'; // Italian
+                alert('An error occurred while generating vocabulary.');
             }
         }
-
-        // We'll let the server select the appropriate voice based on language
-        const ttsSettings = {
-            speed: 0.8,         // Slightly slower for better comprehension
-            model: 'tts-1-hd'   // Higher quality audio
-        };
-
-        // Get CSRF token from meta tag
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        const response = await fetch('/api/text-to-speech', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({ 
-                text: text,
-                lang: lang,
-                speed: ttsSettings.speed,
-                model: ttsSettings.model
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to generate audio');
+        
+        // Function to play audio for a word
+        async function playWordAudio(word, lang) {
+            try {
+                const response = await fetch('/api/text-to-speech', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify({
+                        text: word,
+                        language: lang
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.audio_url) {
+                    const audio = new Audio(data.audio_url);
+                    audio.play();
+                } else {
+                    console.error('Error playing audio:', data.error);
+                    alert('Failed to play audio: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while playing audio.');
+            }
         }
-
-        const data = await response.json();
-        console.log(`Playing audio in ${lang} with voice "${data.voice}"`);
-        const audio = new Audio(data.audio_url);
-
-        audio.onended = () => {
-            button.innerHTML = originalHTML;
-            button.disabled = false;
-        };
-
-        audio.onerror = () => {
-            console.error('Audio playback failed');
-            button.innerHTML = originalHTML;
-            button.disabled = false;
-        };
-
-        await audio.play();
-    } catch (error) {
-        console.error('TTS error:', error);
-        button.innerHTML = '<i class="bi bi-volume-up"></i>';
-        button.disabled = false;
-    }
-}
+        
+        // Remove the card title event listeners - we don't want titles to speak when clicked
+        // Only add audio functionality to vocabulary words, not general cards
+        document.querySelectorAll('.vocabulary-word').forEach(word => {
+            word.addEventListener('click', function() {
+                const wordText = this.textContent.trim();
+                const lang = document.querySelector('.language-badge')?.dataset.lang || 'es';
+                playWordAudio(wordText, lang);
+            });
+        });
+    });
 </script>
 {% endblock %}

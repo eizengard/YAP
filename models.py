@@ -1,12 +1,13 @@
 from app import db
 from flask_login import UserMixin
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256))
+    password_hash = db.Column(db.String(128))
     progress = db.relationship('Progress', backref='user', lazy=True)
     chats = db.relationship('Chat', backref='user', lazy=True)
     vocabulary_progress = db.relationship('VocabularyProgress', backref='user', lazy=True)
@@ -14,6 +15,22 @@ class User(UserMixin, db.Model):
     daily_vocabulary = db.relationship('DailyVocabulary', backref='user', lazy=True)
     sentence_practices = db.relationship('SentencePractice', backref='user', lazy=True)
     speaking_attempts = db.relationship('UserSpeakingAttempt', backref='student', lazy=True)
+    wallet_address = db.Column(db.String(42), unique=True)  # Ethereum addresses are 42 characters (with '0x')
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'wallet_address': self.wallet_address,
+            # Include other relevant fields
+        }
 
 class UserPreferences(db.Model):
     id = db.Column(db.Integer, primary_key=True)
