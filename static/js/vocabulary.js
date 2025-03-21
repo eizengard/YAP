@@ -434,32 +434,55 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(window.vocabUpdateTimeout);
         }
         
-        // Implement fetch with retry
+        // Implement fetch with retry and fallback
         let retryCount = 0;
         const maxRetries = 3;
         
         async function fetchWithRetry() {
             try {
                 const mode = currentMode || 'flashcards';
+                // Generate a truly unique timestamp to prevent any cache issues
+                const timestamp = Date.now() + Math.floor(Math.random() * 1000);
                 const url = currentCategory 
-                    ? `/api/vocabulary/exercise?mode=${mode}&category=${encodeURIComponent(currentCategory)}&timestamp=${Date.now()}&skip_cache=true`
-                    : `/api/vocabulary/exercise?mode=${mode}&timestamp=${Date.now()}&skip_cache=true`;
+                    ? `/api/vocabulary/exercise?mode=${mode}&category=${encodeURIComponent(currentCategory)}&timestamp=${timestamp}&skip_cache=true&random=${Math.random()}`
+                    : `/api/vocabulary/exercise?mode=${mode}&timestamp=${timestamp}&skip_cache=true&random=${Math.random()}`;
                 
                 console.log(`Fetching new word from: ${url} (attempt ${retryCount + 1})`);
                 const response = await fetch(url, {
+                    method: 'GET',
                     cache: 'no-store', // Prevent caching
                     headers: {
                         'Pragma': 'no-cache',
-                        'Cache-Control': 'no-cache'
-                    }
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
                 });
                 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Server error: ${response.status} - ${errorText}`);
+                // First try to parse JSON response
+                let data;
+                let errorText = '';
+                
+                try {
+                    // Try to get the response as JSON
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.indexOf('application/json') !== -1) {
+                        data = await response.json();
+                    } else {
+                        // If not JSON, get as text
+                        errorText = await response.text();
+                        console.error('Non-JSON response:', errorText);
+                        throw new Error('Unexpected response format');
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing response:', parseError);
+                    throw new Error(`Response parse error: ${errorText || parseError.message}`);
                 }
                 
-                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status} - ${JSON.stringify(data)}`);
+                }
+                
                 console.log('New word received:', data);
                 
                 // Update state
@@ -483,11 +506,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
                     return fetchWithRetry();
                 } else {
-                    // All retries failed
+                    // All retries failed - try a fallback approach
+                    console.log('All retries failed, attempting fallback method');
+                    
+                    // Try a simplified API call without parameters to get any word
+                    try {
+                        const fallbackUrl = `/api/vocabulary/exercise?timestamp=${Date.now()}&fallback=true`;
+                        const fallbackResponse = await fetch(fallbackUrl, { 
+                            cache: 'no-store',
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (fallbackResponse.ok) {
+                            const fallbackData = await fallbackResponse.json();
+                            currentWord = fallbackData;
+                            window.currentWord = fallbackData;
+                            displayExercise(currentMode || 'flashcards', fallbackData);
+                            console.log('Fallback successful');
+                            return true;
+                        }
+                    } catch (fallbackError) {
+                        console.error('Fallback attempt also failed:', fallbackError);
+                    }
+                    
+                    // If all fails, show error message with reload button
                     vocabularyExercise.innerHTML = `
                         <div class="alert alert-danger">
-                            Failed to load next word after multiple attempts: ${error.message}
-                            <button class="btn btn-outline-primary mt-2" onclick="location.reload()">Reload Page</button>
+                            <h5><i class="bi bi-exclamation-circle me-2"></i>Unable to load vocabulary</h5>
+                            <p>We're having trouble connecting to the server. Please try again later.</p>
+                            <div class="mt-3">
+                                <button class="btn btn-outline-primary me-2" onclick="location.reload()">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Reload Page
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="window.vocabularyJS.loadExercise('flashcards')">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Try Different Word
+                                </button>
+                            </div>
                         </div>
                     `;
                     return false;

@@ -592,24 +592,66 @@ def get_vocabulary_exercise():
         mode = request.args.get('mode', 'flashcards')
         category = request.args.get('category')
         skip_cache = request.args.get('skip_cache', 'false').lower() == 'true'
+        fallback = request.args.get('fallback', 'false').lower() == 'true'
+        
+        # If this is a fallback request, use a simplified approach
+        if fallback:
+            logger.info("Using fallback approach to get any vocabulary word")
+            try:
+                # Get user's language preference
+                user_language = current_user.preferences.target_language if current_user.preferences else 'es'
+                
+                # Get any random word in the user's language
+                word = VocabularyItem.query.filter_by(language=user_language).order_by(db.func.random()).first()
+                
+                if word:
+                    return jsonify({
+                        'id': word.id,
+                        'word': word.word,
+                        'translation': word.translation,
+                        'language': word.language,
+                        'example_sentence': word.example_sentence,
+                        'category': word.category,
+                    })
+                else:
+                    # If no words in user's language, get any word
+                    word = VocabularyItem.query.order_by(db.func.random()).first()
+                    if word:
+                        return jsonify({
+                            'id': word.id,
+                            'word': word.word,
+                            'translation': word.translation,
+                            'language': word.language,
+                            'example_sentence': word.example_sentence,
+                            'category': word.category,
+                        })
+            except Exception as e:
+                logger.error(f"Error in fallback vocabulary fetch: {str(e)}")
+                # Continue to normal flow if fallback fails
         
         # Get user's language preference
         user_language = current_user.preferences.target_language if current_user.preferences else 'es'
         logger.debug(f"Loading vocabulary exercise for language: {user_language} and category: {category}")
 
         # Check if category has enough words and add more if needed
-        ensure_category_has_enough_words(user_language, category)
+        if category:
+            ensure_category_has_enough_words(user_language, category)
 
-        # Get user's vocabulary progress
+        # Safely get user's vocabulary progress
         progress = VocabularyProgress.query.filter_by(user_id=current_user.id).all()
         reviewed_ids = [p.vocabulary_id for p in progress]
 
-        # Create or get the session list of recently seen words
-        if 'recently_seen_words' not in session:
-            session['recently_seen_words'] = []
-        
-        recently_seen = session['recently_seen_words']
-        logger.debug(f"Recently seen words: {recently_seen}")
+        # Create or get the session list of recently seen words - with safer handling
+        recently_seen = []
+        try:
+            if 'recently_seen_words' in session:
+                recently_seen = session.get('recently_seen_words', [])
+                if not isinstance(recently_seen, list):
+                    recently_seen = []  # Reset if not a list
+            logger.debug(f"Recently seen words: {recently_seen}")
+        except Exception as e:
+            logger.error(f"Error accessing session: {str(e)}")
+            recently_seen = []  # Use empty list if session access fails
         
         # Prioritize words that haven't been reviewed or have low proficiency
         query = VocabularyItem.query.filter_by(language=user_language)  # Filter by language
@@ -618,7 +660,8 @@ def get_vocabulary_exercise():
             query = query.filter_by(category=category)
 
         # Check if there are any matching words
-        if query.count() == 0:
+        word_count = query.count()
+        if word_count == 0:
             logger.warning(f"No vocabulary items found for language {user_language} and category {category}")
             return jsonify({'error': f'No vocabulary items available for {user_language}'}), 404
 
@@ -626,76 +669,45 @@ def get_vocabulary_exercise():
         all_word_ids = [item.id for item in query.all()]
         logger.debug(f"Found {len(all_word_ids)} words for category {category}")
         
-        # Clear the recently seen list if we've seen all words in the category
-        # or if we've seen more than 70% of them to avoid getting stuck
+        # Safely clear the recently seen list if we've seen all or most words
         if len(recently_seen) >= len(all_word_ids) or (len(recently_seen) > 0 and len(recently_seen) >= 0.7 * len(all_word_ids)):
             logger.debug(f"Clearing recently seen words list (seen {len(recently_seen)}/{len(all_word_ids)})")
             recently_seen = []
-            session['recently_seen_words'] = []
             
-        # Try to find a word that hasn't been seen recently
-        word = None
+        # Simplified approach: just select a random word not in recently seen
+        available_ids = [w_id for w_id in all_word_ids if w_id not in recently_seen]
         
-        # Try up to 5 times to get a word we haven't seen recently
-        for attempt in range(5):
-            logger.debug(f"Attempt {attempt+1} to find unseen word")
-            
-            if reviewed_ids:
-                # Mix of new and review words
-                if random.random() < 0.7:  # 70% chance of new words
-                    # Get words not in recently_seen and not reviewed
-                    available_ids = [w_id for w_id in all_word_ids if w_id not in recently_seen and w_id not in reviewed_ids]
-                    
-                    if available_ids:
-                        chosen_id = random.choice(available_ids)
-                        word = query.filter_by(id=chosen_id).first()
-                        logger.debug(f"Selected new word with ID {chosen_id}")
-                    else:
-                        # No unseen words available, try ones not in recently_seen
-                        available_ids = [w_id for w_id in all_word_ids if w_id not in recently_seen]
-                        if available_ids:
-                            chosen_id = random.choice(available_ids)
-                            word = query.filter_by(id=chosen_id).first()
-                            logger.debug(f"Selected word with ID {chosen_id} (previously reviewed)")
-                else:
-                    # Review words with low proficiency
-                    progress_items = [p for p in progress if p.proficiency < 70 and p.vocabulary_id not in recently_seen]
-                    
-                    if progress_items:
-                        chosen_progress = random.choice(progress_items)
-                        word = query.filter_by(id=chosen_progress.vocabulary_id).first()
-                        logger.debug(f"Selected low proficiency word with ID {chosen_progress.vocabulary_id}")
-            else:
-                # No progress yet, pick a random word not in recently_seen
-                available_ids = [w_id for w_id in all_word_ids if w_id not in recently_seen]
-                
-                if available_ids:
-                    chosen_id = random.choice(available_ids)
-                    word = query.filter_by(id=chosen_id).first()
-                    logger.debug(f"Selected random word with ID {chosen_id} (no progress yet)")
-            
-            # If we got a word, break out of the loop
-            if word:
-                break
-        
-        # If all attempts failed, just pick any random word
-        if not word:
-            logger.warning(f"All attempts to find unseen word failed, picking random word")
+        # If no unseen words available, just pick any random word
+        if not available_ids:
+            logger.debug("No unseen words available, picking any random word")
             word = query.order_by(db.func.random()).first()
+        else:
+            # Select a random word from available IDs
+            chosen_id = random.choice(available_ids)
+            word = query.filter_by(id=chosen_id).first()
+            logger.debug(f"Selected word with ID {chosen_id}")
         
         if not word:
             logger.warning(f"No vocabulary item found even after fallback checks")
             return jsonify({'error': 'No vocabulary items available'}), 404
 
-        # Add this word to recently seen
-        if word.id not in recently_seen:
-            recently_seen.append(word.id)
-            # Keep only the 10 most recent words
-            if len(recently_seen) > 10:
-                recently_seen.pop(0)
-            session['recently_seen_words'] = recently_seen
-            session.modified = True
-            logger.debug(f"Added word ID {word.id} to recently seen, list now: {recently_seen}")
+        # Add this word to recently seen with safer session handling
+        try:
+            if word.id not in recently_seen:
+                recently_seen.append(word.id)
+                # Keep only the 10 most recent words
+                if len(recently_seen) > 10:
+                    recently_seen.pop(0)
+                session['recently_seen_words'] = recently_seen
+                try:
+                    session.modified = True
+                except:
+                    # Some session backends don't support this attribute
+                    pass
+                logger.debug(f"Added word ID {word.id} to recently seen, list now: {recently_seen}")
+        except Exception as e:
+            logger.error(f"Error updating session: {str(e)}")
+            # Continue even if session update fails
 
         response = {
             'id': word.id,
@@ -724,7 +736,24 @@ def get_vocabulary_exercise():
         return jsonify(response)
 
     except Exception as e:
-        logger.error(f"Error getting vocabulary exercise: {str(e)}")
+        logger.error(f"Error getting vocabulary exercise: {str(e)}", exc_info=True)
+        
+        # Emergency fallback - get any word in any language as a last resort
+        try:
+            word = VocabularyItem.query.order_by(db.func.random()).first()
+            if word:
+                logger.info("Using emergency fallback to return any word")
+                return jsonify({
+                    'id': word.id,
+                    'word': word.word,
+                    'translation': word.translation,
+                    'language': word.language,
+                    'example_sentence': word.example_sentence,
+                    'category': word.category or 'General',
+                })
+        except:
+            pass
+            
         return jsonify({'error': 'Failed to load exercise'}), 500
 
 def ensure_category_has_enough_words(language, category):
